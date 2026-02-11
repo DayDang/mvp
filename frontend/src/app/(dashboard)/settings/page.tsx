@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { 
   User, 
   Building2, 
@@ -16,8 +15,12 @@ import {
   Wifi,
   WifiOff,
   ExternalLink,
-  Settings2
+  Settings2,
+  MessageSquare,
+  Instagram,
+  Send
 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -47,11 +50,12 @@ const mockNotifications = {
   weeklySummary: true,
 };
 
-const mockPlatforms = [
-  { platform: "WhatsApp", connected: true, lastSync: new Date(), color: "text-green-500" },
-  { platform: "Instagram", connected: true, lastSync: new Date(), color: "text-pink-500" },
-  { platform: "Telegram", connected: false, lastSync: null, color: "text-blue-500" },
-];
+const PLATFORMS_CONFIG: Record<string, { name: string, icon: any, color: string }> = {
+  WHATSAPP: { name: "WhatsApp", icon: MessageSquare, color: "text-green-500" },
+  INSTAGRAM: { name: "Instagram", icon: Instagram, color: "text-pink-500" },
+  MESSENGER: { name: "Messenger", icon: Send, color: "text-blue-500" },
+  TELEGRAM: { name: "Telegram", icon: Send, color: "text-sky-500" },
+};
 
 const mockIntegrations = [
   { 
@@ -112,12 +116,13 @@ const SettingsSection = ({
   description: string; 
   children: React.ReactNode;
 }) => (
-  <div className="space-y-6">
-    <div>
-      <h2 className="text-lg font-bold text-white mb-1">{title}</h2>
-      <p className="text-xs text-zinc-500 font-medium">{description}</p>
+  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="relative">
+      <h2 className="text-2xl font-black text-white mb-2 tracking-tight">{title}</h2>
+      <p className="text-sm text-zinc-500 font-medium max-w-xl leading-relaxed">{description}</p>
+      <div className="absolute -left-8 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary/20 rounded-full blur-sm" />
     </div>
-    <div className="space-y-4">
+    <div className="space-y-6">
       {children}
     </div>
   </div>
@@ -130,11 +135,13 @@ const SettingsField = ({
   label: string; 
   children: React.ReactNode;
 }) => (
-  <div className="space-y-2">
-    <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">
+  <div className="space-y-3 group">
+    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] group-focus-within:text-primary transition-colors">
       {label}
     </label>
-    {children}
+    <div className="relative">
+      {children}
+    </div>
   </div>
 );
 
@@ -148,13 +155,13 @@ const Toggle = ({
   <button
     onClick={() => onChange(!enabled)}
     className={cn(
-      "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-      enabled ? "bg-primary" : "bg-zinc-800"
+      "relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 shadow-inner",
+      enabled ? "bg-primary shadow-[0_0_12px_rgba(var(--primary),0.3)]" : "bg-zinc-800"
     )}
   >
     <span
       className={cn(
-        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-lg",
         enabled ? "translate-x-6" : "translate-x-1"
       )}
     />
@@ -166,7 +173,64 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState(mockUser);
   const [workspace, setWorkspace] = useState(mockWorkspace);
   const [notifications, setNotifications] = useState(mockNotifications);
-  const [platforms] = useState(mockPlatforms);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
+
+  const fetchAccounts = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`${API_URL}/accounts`);
+      const data = await res.json();
+      setAccounts(data.accounts?.items || []);
+    } catch (error) {
+      console.error("Failed to fetch accounts", error);
+      toast.error("Failed to load connected accounts");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddAccount = async (type: string) => {
+    const newWindow = window.open('about:blank', '_blank');
+    try {
+      if (newWindow) newWindow.document.write('Loading connection wizard...');
+      const res = await fetch(`${API_URL}/accounts/connect?type=${type}`);
+      const data = await res.json();
+      if (data.url && newWindow) {
+        newWindow.location.assign(data.url);
+        toast.success(`Opening ${type} connection wizard...`);
+      } else {
+        if (newWindow) newWindow.close();
+        throw new Error("No link generated");
+      }
+    } catch (error) {
+      if (newWindow) newWindow.close();
+      toast.error("Failed to generate connection link");
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string) => {
+    if (!confirm("Are you sure you want to disconnect this account?")) return;
+    try {
+      const res = await fetch(`${API_URL}/accounts/${accountId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        toast.success("Account disconnected successfully");
+        fetchAccounts();
+      } else {
+        throw new Error("Failed to disconnect");
+      }
+    } catch (error) {
+      toast.error("Failed to disconnect account");
+    }
+  };
 
   const sections = [
     { id: "profile", label: "Profile", icon: User },
@@ -202,40 +266,60 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="h-full bg-[#09090b] flex flex-col">
-      {/* Header */}
-      <div className="p-8 pb-6 border-b border-white/5 shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Account Settings</h1>
-          <p className="text-sm text-zinc-500 font-medium">Manage your profile, workspace, and preferences</p>
-        </div>
-      </div>
+    <div className="flex h-full w-full bg-[#09090b] relative overflow-hidden">
+      {/* Subtle Page Background Gradient */}
+      <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+      
+      <div className="flex-1 flex flex-col relative z-10">
+        {/* Header */}
+        <header className="flex-shrink-0 px-12 py-10 border-b border-white/5 bg-zinc-950/20 backdrop-blur-md">
+          <div className="flex items-center gap-4 mb-2">
+            <div className="p-2.5 bg-primary/10 rounded-xl">
+              <Settings2 className="w-5 h-5 text-primary" />
+            </div>
+            <h1 className="text-3xl font-black text-white tracking-tighter">System Settings</h1>
+          </div>
+          <p className="text-sm text-zinc-500 font-medium">Configure your workspace, security, and messaging infrastructure</p>
+        </header>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="flex h-full">
-          {/* Sidebar Navigation */}
-          <div className="w-64 border-r border-white/5 p-6 shrink-0">
+        <main className="flex-1 flex overflow-hidden">
+          {/* Side Nav */}
+          <div className="w-80 border-r border-white/5 p-8 overflow-y-auto no-scrollbar bg-zinc-950/20">
+            <div className="mb-8 pl-1">
+              <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em]">Configuration</span>
+            </div>
             <nav className="space-y-2">
               {sections.map((section) => {
                 const Icon = section.icon;
                 const isActive = activeSection === section.id;
-                const isDanger = section.id === "danger";
                 
                 return (
                   <button
                     key={section.id}
                     onClick={() => setActiveSection(section.id)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left",
+                      "w-full flex items-center gap-4 p-4 rounded-2xl transition-all duration-500 group relative",
                       isActive 
-                        ? "bg-white/10 text-white ring-1 ring-white/10" 
-                        : isDanger
-                        ? "text-red-500 hover:bg-red-500/5"
-                        : "text-zinc-500 hover:text-white hover:bg-white/5"
+                        ? "bg-white/[0.08] text-primary shadow-[0_8px_24px_rgba(0,0,0,0.2)] ring-1 ring-white/10" 
+                        : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]"
                     )}
                   >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm font-bold">{section.label}</span>
+                    <Icon className={cn(
+                      "w-5 h-5 transition-all duration-500",
+                      isActive ? "scale-110 text-primary" : "group-hover:scale-110 group-hover:text-zinc-300"
+                    )} />
+                    <span className={cn(
+                      "text-[11px] font-black uppercase tracking-[0.2em] transition-colors",
+                      isActive ? "text-zinc-100" : "text-zinc-600 group-hover:text-zinc-400"
+                    )}>
+                      {section.label}
+                    </span>
+                    {isActive && (
+                      <motion.div 
+                        layoutId="active-section"
+                        className="absolute -left-1 w-1 h-8 bg-primary rounded-r-full shadow-[0_0_12px_rgba(var(--primary),0.8)]"
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -406,43 +490,68 @@ export default function SettingsPage() {
                     description="Manage your messaging platform integrations"
                   >
                     <div className="space-y-4">
-                      {platforms.map((platform) => (
-                        <div key={platform.platform} className="flex items-center justify-between p-4 rounded-xl bg-zinc-950/30 border border-white/5">
-                          <div className="flex items-center gap-4">
-                            <div className={cn("w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center", platform.color)}>
-                              <Plug className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-white mb-1">{platform.platform}</p>
-                              {platform.connected ? (
-                                <p className="text-xs text-zinc-500">
-                                  Last synced: {platform.lastSync?.toLocaleTimeString()}
-                                </p>
-                              ) : (
-                                <p className="text-xs text-red-500">Not connected</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Badge className={cn(
-                              "rounded-lg px-3 py-1 text-[10px] font-bold",
-                              platform.connected 
-                                ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                : "bg-red-500/10 text-red-500 border-red-500/20"
-                            )}>
-                              {platform.connected ? "Connected" : "Disconnected"}
-                            </Badge>
-                            <Button
-                              onClick={() => handleReconnect(platform.platform)}
-                              variant="outline"
-                              size="sm"
-                              className="rounded-lg border-white/10 text-xs font-bold"
-                            >
-                              {platform.connected ? "Reconnect" : "Connect"}
-                            </Button>
-                          </div>
+                      {accounts.length === 0 && !isLoading && (
+                        <div className="p-8 text-center rounded-xl bg-zinc-950/30 border border-dashed border-white/10">
+                          <p className="text-sm text-zinc-500 mb-4">No platforms connected yet.</p>
                         </div>
-                      ))}
+                      )}
+
+                      {accounts.map((account: any) => {
+                        const config = PLATFORMS_CONFIG[account.type] || { name: account.type, icon: Plug, color: "text-zinc-500" };
+                        const Icon = config.icon;
+                        
+                        return (
+                          <div key={account.id} className="flex items-center justify-between p-4 rounded-xl bg-zinc-950/30 border border-white/5">
+                            <div className="flex items-center gap-4">
+                              <div className={cn("w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center", config.color)}>
+                                <Icon className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-white mb-1">{account.name || config.name}</p>
+                                <p className="text-xs text-zinc-500 uppercase tracking-tight">
+                                  Provider: {config.name} • Status: {account.status}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge className={cn(
+                                "rounded-lg px-3 py-1 text-[10px] font-bold",
+                                account.status === 'OK' 
+                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                  : "bg-red-500/10 text-red-500 border-red-500/20"
+                              )}>
+                                {account.status === 'OK' ? "Connected" : "Action Required"}
+                              </Badge>
+                              <Button
+                                onClick={() => handleDeleteAccount(account.id)}
+                                variant="outline"
+                                size="sm"
+                                className="rounded-lg border-red-500/10 text-red-500 hover:bg-red-500/5 text-xs font-bold"
+                              >
+                                Disconnect
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      <div className="pt-4 border-t border-white/5">
+                        <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-4">Available Platforms</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {Object.entries(PLATFORMS_CONFIG).map(([id, config]) => (
+                            <button
+                              key={id}
+                              onClick={() => handleAddAccount(id)}
+                              className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/50 transition-all group"
+                            >
+                              <div className={cn("w-10 h-10 rounded-xl bg-black flex items-center justify-center group-hover:scale-110 transition-transform", config.color)}>
+                                <config.icon className="w-5 h-5" />
+                              </div>
+                              <span className="text-xs font-bold text-white">{config.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </SettingsSection>
                 </motion.div>
@@ -598,7 +707,7 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
