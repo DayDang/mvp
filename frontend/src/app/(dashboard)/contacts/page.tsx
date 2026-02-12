@@ -47,8 +47,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
-// --- TYPES ---
-type ClientTier = 'Whale' | 'Gold' | 'Lead' | 'At Risk';
 type Sentiment = 'positive' | 'negative' | 'neutral';
 
 interface Contact {
@@ -56,7 +54,6 @@ interface Contact {
   name: string;
   email: string;
   phone: string;
-  tier: ClientTier;
   sentiment: Sentiment;
   lifetimeValue: number;
   platforms: ('whatsapp' | 'instagram' | 'telegram')[];
@@ -72,7 +69,6 @@ const CONTACTS: Contact[] = [
     name: "Alex Johnson",
     email: "alex@example.com",
     phone: "+44 7700 900077",
-    tier: "Whale",
     sentiment: "positive",
     lifetimeValue: 12500,
     platforms: ["whatsapp", "telegram"],
@@ -85,7 +81,6 @@ const CONTACTS: Contact[] = [
     name: "Sarah Miller",
     email: "sarah.m@designhub.co",
     phone: "+44 7700 900555",
-    tier: "Lead",
     sentiment: "positive",
     lifetimeValue: 0,
     platforms: ["instagram"],
@@ -98,7 +93,6 @@ const CONTACTS: Contact[] = [
     name: "Michael Chen",
     email: "m.chen@techglobal.com",
     phone: "+1 555 0123",
-    tier: "Gold",
     sentiment: "neutral",
     lifetimeValue: 4200,
     platforms: ["whatsapp", "instagram", "telegram"],
@@ -111,7 +105,6 @@ const CONTACTS: Contact[] = [
     name: "Emma Wilson",
     email: "emma.w@lifestyle.io",
     phone: "+44 7700 900111",
-    tier: "At Risk",
     sentiment: "negative",
     lifetimeValue: 850,
     platforms: ["whatsapp"],
@@ -124,7 +117,6 @@ const CONTACTS: Contact[] = [
     name: "James Bond",
     email: "007@mi6.gov.uk",
     phone: "Secret",
-    tier: "Whale",
     sentiment: "positive",
     lifetimeValue: 250000,
     platforms: ["telegram"],
@@ -140,13 +132,6 @@ const PLATFORM_ICONS = {
   telegram: <Send className="w-3.5 h-3.5 text-blue-500" />,
 };
 
-const TIER_CONFIG = {
-  Whale: { color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20", icon: Gem },
-  Gold: { color: "text-zinc-300", bg: "bg-white/10", border: "border-white/20", icon: Activity },
-  Lead: { color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", icon: TrendingUp },
-  "At Risk": { color: "text-red-500", bg: "bg-red-500/10", border: "border-red-500/20", icon: AlertTriangle },
-};
-
 const SENTIMENT_ICONS = {
   positive: <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500/20" />,
   negative: <TrendingDown className="w-3.5 h-3.5 text-red-500" />,
@@ -155,27 +140,20 @@ const SENTIMENT_ICONS = {
 
 export default function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSegment, setSelectedSegment] = useState<'All' | 'Whales' | 'Leads' | 'At Risk'>('All');
   const [showTagDrawer, setShowTagDrawer] = useState(false);
   const [tagList, setTagList] = useState(['VIP', 'Drop Inquiry', 'High Intent', 'Personal Shopping', 'Ultra VIP']);
   const [newTagInput, setNewTagInput] = useState("");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
   const filteredContacts = useMemo(() => {
     return CONTACTS.filter(contact => {
       const matchesSearch = contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             contact.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             contact.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
       
-      const matchesSegment = selectedSegment === 'All' || 
-                             (selectedSegment === 'Whales' && contact.tier === 'Whale') ||
-                             (selectedSegment === 'Leads' && contact.tier === 'Lead') ||
-                             (selectedSegment === 'At Risk' && contact.tier === 'At Risk');
-                             
-      return matchesSearch && matchesSegment;
+      return matchesSearch;
     });
-  }, [searchQuery, selectedSegment]);
+  }, [searchQuery]);
 
   const handleAction = (action: string, contactName: string) => {
     toast(`${action}: ${contactName}`, {
@@ -211,16 +189,19 @@ export default function ContactsPage() {
     <LayoutGroup>
       <div className="flex h-full bg-zinc-950/20 backdrop-blur-sm relative overflow-hidden">
         {/* Main Content */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <motion.div 
+          layout
+          className="flex-1 flex flex-col h-full overflow-hidden"
+        >
       {/* Header Section */}
       <div className="p-8 pb-4">
         <div className="flex items-center justify-between mb-10">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Elite CRM Hub</h1>
-            <p className="text-sm text-zinc-500 mt-1 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-primary" />
-              Automated intelligence-driven relationship management
-            </p>
+            <h1 className="text-3xl font-black text-white tracking-tighter uppercase">Relationship Hub</h1>
+            <div className="text-[10px] text-zinc-500 mt-2 flex items-center gap-2 font-black uppercase tracking-[0.2em]">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              Intelligence-driven Audience Management
+            </div>
           </div>
           <div className="flex gap-3">
             <Button 
@@ -245,24 +226,14 @@ export default function ContactsPage() {
               placeholder="Search by name, handle, or customer tags..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 bg-white/5 border-white/5 rounded-2xl h-14 text-base focus-visible:ring-primary/20 text-zinc-200 placeholder:text-zinc-600"
+              className="pl-12 bg-white/5 border-white/5 rounded-2xl h-14 text-base focus-visible:ring-primary/20 text-zinc-200 placeholder:text-zinc-600 shadow-xl shadow-black/20"
             />
           </div>
-          <div className="flex p-1.5 bg-white/5 rounded-2xl border border-white/5 h-14">
-            {["All", "Whales", "Leads", "At Risk"].map((segment) => (
-              <button
-                key={segment}
-                onClick={() => setSelectedSegment(segment as any)}
-                className={cn(
-                  "px-6 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                  selectedSegment === segment 
-                    ? "bg-primary text-black" 
-                    : "text-zinc-500 hover:text-white hover:bg-white/5"
-                )}
-              >
-                {segment}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 px-6 h-14 bg-white/[0.03] border border-white/5 rounded-2xl">
+            <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+            <span className="text-[10px] font-black uppercase tracking-[0.1em] text-zinc-400">
+              {filteredContacts.length} Identified Audiences
+            </span>
           </div>
         </div>
       </div>
@@ -286,15 +257,14 @@ export default function ContactsPage() {
                   </div>
                 </TableHead>
                 <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14 pl-2">Client Insight</TableHead>
-                <TableHead className="w-24"></TableHead>
-                <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14">Tier</TableHead>
-                <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14 text-center">Sentiment IQ</TableHead>
-                <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14">Lifestyle Tags</TableHead>
+                <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14">Presence</TableHead>
+                <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14 text-center">Sentiment</TableHead>
+                <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14">Intelligence Tags</TableHead>
+                <TableHead className="text-zinc-500 font-black uppercase tracking-[0.2em] text-[10px] h-14 text-right pr-8">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredContacts.map((contact) => {
-                const tier = TIER_CONFIG[contact.tier as keyof typeof TIER_CONFIG];
                 return (
                   <TableRow 
                     key={contact.id} 
@@ -317,38 +287,61 @@ export default function ContactsPage() {
                     </TableCell>
                     <TableCell className="py-5 pl-2">
                       <div className="flex items-center gap-4">
-                        <Avatar className="w-12 h-12 border border-white/10 ring-2 ring-transparent group-hover:ring-primary/30 transition-all">
+                        <Avatar className="w-12 h-12 border border-white/10 ring-2 ring-transparent group-hover:ring-primary/30 transition-all rounded-xl overflow-hidden">
                           <AvatarImage src={contact.avatar} />
-                          <AvatarFallback className="bg-zinc-800 text-zinc-400 font-bold text-sm uppercase">{contact.name.substring(0, 2)}</AvatarFallback>
+                          <AvatarFallback className="bg-zinc-800 text-zinc-400 font-black text-xs uppercase rounded-xl">{contact.name.substring(0, 2)}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-bold text-zinc-100 group-hover:text-primary transition-colors">{contact.name}</span>
+                          <span className="text-sm font-bold text-zinc-100 group-hover:text-white transition-colors tracking-tight">{contact.name}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-zinc-500 font-medium">{contact.email}</span>
-                            <span className="w-1 h-1 rounded-full bg-zinc-700" />
-                            <History className="w-3 h-3 text-zinc-600" />
-                            <span className="text-[10px] text-zinc-500 font-medium">{contact.lastActive}</span>
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-tight">{contact.email}</span>
+                            <span className="w-1 h-1 rounded-full bg-zinc-800" />
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-tight">{contact.lastActive}</span>
                           </div>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="w-24">
-                      <div className={cn(
-                        "flex items-center gap-1.5 transition-opacity duration-300",
-                        activeMenuId === contact.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                      )}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {contact.platforms.map((p) => (
+                          <div key={p} className="p-2 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
+                            {PLATFORM_ICONS[p as keyof typeof PLATFORM_ICONS]}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center">
+                        <div className="p-2.5 bg-white/[0.03] rounded-xl border border-white/5 hover:border-white/20 transition-all group/sent">
+                          {SENTIMENT_ICONS[contact.sentiment as keyof typeof SENTIMENT_ICONS]}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1.5 max-w-[200px]">
+                        {contact.tags.map(tag => (
+                          <span key={tag} className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-white/[0.03] text-zinc-500 border border-white/5">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="pr-8">
+                      <div className="flex items-center justify-end gap-2">
                         {contact.platforms.length > 1 ? (
                           <DropdownMenu onOpenChange={(open) => setActiveMenuId(open ? contact.id : null)}>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-black font-bold transition-all">
-                                <MessageCircle className="w-4 h-4" />
+                              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-black font-bold transition-all shadow-lg shadow-primary/5">
+                                <MessageCircle className="w-5 h-5" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="bg-zinc-950 border-white/10 text-zinc-300 rounded-2xl p-2 w-48 backdrop-blur-xl">
-                              <div className="px-3 py-2 text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-1">Select Channel</div>
+                            <DropdownMenuContent align="end" className="bg-zinc-950/90 border-white/5 text-zinc-300 rounded-2xl p-2 w-48 backdrop-blur-3xl shadow-2xl">
+                              <div className="px-3 py-2 text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-1">Direct Message</div>
                               {contact.platforms.map((p) => (
-                                <DropdownMenuItem key={p} className="p-3 rounded-xl focus:bg-white/10 cursor-pointer flex items-center gap-3" onClick={() => handleAction(`Chat via ${p}`, contact.name)}>
-                                  {PLATFORM_ICONS[p as keyof typeof PLATFORM_ICONS]} 
+                                <DropdownMenuItem key={p} className="p-3 rounded-xl focus:bg-white/10 cursor-pointer flex items-center gap-3 group/item" onClick={() => handleAction(`Chat via ${p}`, contact.name)}>
+                                  <div className="p-1.5 rounded-lg bg-white/5 group-focus:bg-white/10 transition-colors">
+                                    {PLATFORM_ICONS[p as keyof typeof PLATFORM_ICONS]} 
+                                  </div>
                                   <span className="text-xs font-bold capitalize">{p}</span>
                                 </DropdownMenuItem>
                               ))}
@@ -358,49 +351,28 @@ export default function ContactsPage() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-9 w-9 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-black font-bold transition-all"
+                            className="h-10 w-10 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-black font-bold transition-all shadow-lg shadow-primary/5"
                             onClick={() => handleAction(`Chat via ${contact.platforms[0]}`, contact.name)}
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-5 h-5" />
                           </Button>
                         )}
                         <DropdownMenu onOpenChange={(open) => setActiveMenuId(open ? contact.id : null)}>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-zinc-500 hover:bg-white/10 hover:text-white">
-                              <MoreVertical className="w-4 h-4" />
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-zinc-600 hover:bg-white/5 hover:text-white transition-colors">
+                              <MoreVertical className="w-5 h-5" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="bg-zinc-950 border-white/10 text-zinc-300 rounded-2xl p-2 w-56 backdrop-blur-xl md:z-50">
-                            <div className="px-3 py-2 text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-1">Management</div>
+                          <DropdownMenuContent align="end" className="bg-zinc-950/90 border-white/5 text-zinc-300 rounded-2xl p-2 w-56 backdrop-blur-3xl shadow-2xl">
+                            <div className="px-3 py-2 text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-1">Hub Management</div>
                             <DropdownMenuItem className="p-3 rounded-xl focus:bg-white/10 cursor-pointer flex items-center gap-3" onClick={() => handleAction("View Profile", contact.name)}>
-                              <ExternalLink className="w-4 h-4" /> <span className="text-xs font-bold">Client Profile</span>
+                              <ExternalLink className="w-4 h-4" /> <span className="text-xs font-bold">Client Intelligence</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem className="p-3 rounded-xl focus:bg-white/10 cursor-pointer flex items-center gap-3" onClick={() => handleAction("Calendar", contact.name)}>
-                              <Calendar className="w-4 h-4" /> <span className="text-xs font-bold">Schedule Styling</span>
+                              <Calendar className="w-4 h-4" /> <span className="text-xs font-bold">Schedule Touchpoint</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn("rounded-xl text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1 w-fit", tier.bg, tier.color, tier.border)}>
-                        {contact.tier}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        <div className="p-2 bg-white/5 rounded-xl border border-white/5 hover:border-white/20 transition-all">
-                          {SENTIMENT_ICONS[contact.sentiment as keyof typeof SENTIMENT_ICONS]}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="pr-8">
-                      <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                        {contact.tags.map(tag => (
-                          <span key={tag} className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/5 text-zinc-400 border border-white/5">
-                            {tag}
-                          </span>
-                        ))}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -418,18 +390,19 @@ export default function ContactsPage() {
         </div>
       </ScrollArea>
       </motion.div>
-      </div>
+      </motion.div>
 
       {/* Tag Hub Drawer */}
       <AnimatePresence>
         {showTagDrawer && (
           <motion.aside
-            initial={{ x: 400 }}
-            animate={{ x: 0 }}
-            exit={{ x: 400 }}
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 320, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
             transition={{ type: "spring", damping: 35, stiffness: 400 }}
-            className="w-80 h-full bg-[#09090b] border-l border-white/5 z-20 flex flex-col shadow-2xl"
+            className="h-full bg-[#09090b] border-l border-white/5 z-20 flex flex-col shadow-2xl overflow-hidden shrink-0"
           >
+            <div className="w-80 h-full flex flex-col">
             <div className="p-8 border-b border-white/5">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white tracking-tight">Tag Hub</h2>
@@ -477,7 +450,8 @@ export default function ContactsPage() {
                 </div>
               </div>
             </ScrollArea>
-          </motion.aside>
+          </div>
+        </motion.aside>
         )}
       </AnimatePresence>
       {/* Bulk Action Bar */}

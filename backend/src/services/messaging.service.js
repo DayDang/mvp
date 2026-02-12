@@ -95,14 +95,39 @@ export const editMessage = async (messageId, text) => {
 
 export const syncConversations = async (accountId) => {
   try {
-    // 1. Fetch from Unipile
+    // 1. Fetch the Account from our DB to ensure it exists and get workspace context
+    // This also serves as a check that the account is authorized for our platform
+    let dbAccount = await prisma.account.findUnique({
+      where: { unipile_id: accountId }
+    });
+
+    // For now, if it doesn't exist, we'll try to find the first workspace and auto-assign 
+    // This helps in transition/initial setup, but in prod we'd want strict workspace assignment
+    if (!dbAccount) {
+      const firstWorkspace = await prisma.workspace.findFirst();
+      if (!firstWorkspace) throw new Error('No workspaces found. Please seed the database.');
+      
+      const unipileData = await unipileClient.account.getOne(accountId);
+      
+      dbAccount = await prisma.account.create({
+        data: {
+          unipile_id: accountId,
+          workspace_id: firstWorkspace.id,
+          name: unipileData.name || 'Unknown Account',
+          provider: unipileData.type || 'UNKNOWN'
+        }
+      });
+      console.log(`✅ Auto-registered account ${accountId} to default workspace`);
+    }
+
+    // 2. Fetch chats from Unipile
     const chatsResponse = await unipileClient.messaging.getAllChats({
       account_id: accountId
     });
 
     const chats = chatsResponse.items || [];
 
-    // 2. Update DB
+    // 3. Update DB
     for (const chatData of chats) {
       await prisma.chat.upsert({
         where: { unipile_id: chatData.id },
@@ -114,7 +139,7 @@ export const syncConversations = async (accountId) => {
         },
         create: {
           unipile_id: chatData.id,
-          account_id: chatData.account_id,
+          account_id: chatData.account_id, // This links via the unique unipile_id in Account model
           name: chatData.name,
           type: chatData.type,
           unread_count: chatData.unread_count,
@@ -122,8 +147,6 @@ export const syncConversations = async (accountId) => {
           timestamp: chatData.timestamp ? new Date(chatData.timestamp) : undefined,
         }
       });
-      
-      // For MVP, we only sync chats. To sync messages, we would loop through messages here.
     }
 
     return { synced_count: chats.length };

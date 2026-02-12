@@ -10,15 +10,88 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id            String            @id @default(uuid())
+  email         String            @unique
+  name          String?
+  avatar_url    String?
+  is_active     Boolean           @default(true)
+  password_hash String? // Optional for invited users
+  created_by    String?
+  updated_by    String?
+  memberships   WorkspaceMember[]
+  refreshTokens RefreshToken[]
+  created_at    DateTime          @default(now())
+  updated_at    DateTime          @updatedAt
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  expires_at  DateTime
+  revoked     Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
+model Workspace {
+  id            String            @id @default(uuid())
+  name          String
+  is_active     Boolean           @default(true)
+  created_by    String?
+  updated_by    String?
+  members       WorkspaceMember[]
+  accounts      Account[]
+  created_at    DateTime          @default(now())
+  updated_at    DateTime          @updatedAt
+}
+
+model WorkspaceMember {
+  id            String    @id @default(uuid())
+  user_id       String
+  workspace_id  String
+  role          String    // ADMIN, MANAGER (validated at app level)
+  is_active     Boolean   @default(true)
+  created_by    String?
+  updated_by    String?
+  user          User      @relation(fields: [user_id], references: [id])
+  workspace     Workspace @relation(fields: [workspace_id], references: [id])
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@unique([user_id, workspace_id])
+}
+
+model Account {
+  id            String    @id @default(uuid())
+  unipile_id    String    @unique
+  workspace_id  String
+  workspace     Workspace @relation(fields: [workspace_id], references: [id])
+  name          String?
+  provider      String?   // WHATSAPP, INSTAGRAM, TELEGRAM, etc.
+  is_active     Boolean   @default(true)
+  created_by    String?
+  updated_by    String?
+  chats         Chat[]
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+}
+
 model Chat {
   id              String    @id @default(uuid())
   unipile_id      String    @unique
   account_id      String
+  account         Account   @relation(fields: [account_id], references: [unipile_id])
   name            String?
   type            String?
   timestamp       DateTime?
   unread_count    Int       @default(0)
   last_message    String?
+  is_active       Boolean   @default(true)
+  created_by      String?
+  updated_by      String?
   messages        Message[]
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
@@ -36,6 +109,9 @@ model Message {
   timestamp       DateTime?
   is_from_me      Boolean   @default(false)
   attachments     String?   // JSON string of attachments metadata
+  is_active       Boolean   @default(true)
+  created_by      String?
+  updated_by      String?
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 }

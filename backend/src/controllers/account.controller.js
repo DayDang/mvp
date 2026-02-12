@@ -15,7 +15,8 @@ export const connectAccount = async (req, res) => {
 
 export const getAccounts = async (req, res) => {
   try {
-    const accounts = await unipileService.listConnectedAccounts();
+    const workspaceId = req.headers['x-workspace-id'];
+    const accounts = await unipileService.listConnectedAccounts(workspaceId);
     res.json({ accounts });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch accounts' });
