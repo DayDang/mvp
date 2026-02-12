@@ -45,6 +45,55 @@ export const listWorkspaceMembers = async (workspaceId, skip = 0, take = 10) => 
   };
 };
 
+export const listScopedUsers = async (adminId, skip = 0, take = 10) => {
+  // Get all workspace IDs where the admin is a member
+  const adminMemberships = await prisma.workspaceMember.findMany({
+    where: { user_id: adminId, is_active: true },
+    select: { workspace_id: true }
+  });
+  const workspaceIds = adminMemberships.map(m => m.workspace_id);
+
+  const where = {
+    OR: [
+      { created_by: adminId },
+      { 
+        memberships: {
+          some: {
+            workspace_id: { in: workspaceIds },
+            is_active: true
+          }
+        }
+      }
+    ]
+  };
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { created_at: 'desc' },
+      include: {
+        memberships: {
+          where: { is_active: true },
+          include: { workspace: true }
+        }
+      }
+    }),
+    prisma.user.count({ where })
+  ]);
+
+  return {
+    users,
+    pagination: {
+      total,
+      page: Math.floor(skip / take) + 1,
+      limit: take,
+      totalPages: Math.ceil(total / take)
+    }
+  };
+};
+
 export const addMemberToWorkspace = async (workspaceId, { userId, role }, creatorId) => {
   return await prisma.workspaceMember.create({
     data: {
@@ -86,6 +135,16 @@ export const getUserByEmail = async (email) => {
           workspace: true
         }
       }
+    }
+  });
+};
+
+export const globalDeactivateUser = async (userId, updaterId) => {
+  return await prisma.user.update({
+    where: { id: userId },
+    data: { 
+      is_active: false,
+      updated_by: updaterId
     }
   });
 };

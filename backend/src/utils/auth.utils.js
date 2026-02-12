@@ -30,3 +30,8 @@ export const verifyAccessToken = (token) => {
 export const verifyRefreshToken = (token) => {
   return jwt.verify(token, REFRESH_TOKEN_SECRET);
 };
+
+export const verifyToken = (token, secretType = 'access') => {
+  const secret = secretType === 'refresh' ? REFRESH_TOKEN_SECRET : ACCESS_TOKEN_SECRET;
+  return jwt.verify(token, secret);
+};

@@ -78,6 +78,7 @@ export const me = async (req, res) => {
         is_active: true,
         memberships: {
           where: {
+            is_active: true,
             workspace: {
               is_active: true
             }
@@ -113,5 +114,24 @@ export const updateMe = async (req, res) => {
     res.json({ user });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+export const acceptInvitation = async (req, res) => {
+  try {
+    const { token, name, password } = req.body;
+    const { user, accessToken, refreshToken } = await authService.acceptInvitation(token, { name, password });
+    
+    // Send refresh token as HttpOnly cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({ user, accessToken });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 };

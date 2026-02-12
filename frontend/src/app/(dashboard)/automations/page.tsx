@@ -1123,7 +1123,7 @@ export default function AutomationsPage() {
                       <textarea 
                         className="w-full bg-zinc-950 border border-white/5 rounded-xl p-3 text-xs text-zinc-400 h-24 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none"
                         placeholder="Explain purpose of this logic..."
-                        value={selectedNode.data?.notes || ""}
+                        value={(selectedNode.data?.notes as string) || ""}
                         onChange={(e) => {
                           const newNotes = e.target.value;
                           setNodes((nds) => nds.map((n) => n.id === selectedNodeId ? { ...n, data: { ...n.data, notes: newNotes } } : n));

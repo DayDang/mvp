@@ -49,6 +49,12 @@ const NAVIGATION = [
   { name: "Analytics", icon: BarChart3, href: "/analytics" },
 ];
 
+const ORG_NAVIGATION = [
+  { name: "Infrastructure", icon: Building2, href: "/infrastructure" },
+  { name: "Personnel", icon: Users, href: "/personnel" },
+  { name: "Integrations", icon: Plug, href: "/integrations" },
+];
+
 const PLATFORMS = [
   { id: 'WHATSAPP', name: "WhatsApp", icon: MessageSquare, color: "text-green-500" },
   { id: 'INSTAGRAM', name: "Instagram", icon: Instagram, color: "text-pink-500" },
@@ -237,11 +243,9 @@ export function Sidebar() {
   const handleAction = (name: string) => {
     const SETTINGS_TAB_KEY = 'identityhub_active_settings_tab';
     if (name === 'Create Workspace') {
-      localStorage.setItem(SETTINGS_TAB_KEY, 'hub');
-      window.location.href = '/settings';
+      window.location.href = '/infrastructure';
     } else if (name === 'Add Connection') {
-      localStorage.setItem(SETTINGS_TAB_KEY, 'platforms');
-      window.location.href = '/settings';
+      window.location.href = '/integrations';
     } else {
       toast.info(`Action: ${name}`);
     }
@@ -262,6 +266,18 @@ export function Sidebar() {
       <div className="flex flex-col gap-4 w-full items-center flex-1">
         <TooltipProvider delayDuration={0}>
           {NAVIGATION.map((item) => (
+            <NavItem 
+              key={item.name} 
+              {...item} 
+              isActive={pathname === item.href} 
+            />
+          ))}
+        </TooltipProvider>
+
+        <div className="w-8 h-px bg-white/5 my-2" />
+
+        <TooltipProvider delayDuration={0}>
+          {ORG_NAVIGATION.map((item) => (
             <NavItem 
               key={item.name} 
               {...item} 

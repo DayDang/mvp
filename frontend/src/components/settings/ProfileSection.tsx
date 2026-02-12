@@ -34,13 +34,11 @@ export const ProfileSection = () => {
       await updateProfile({ name, avatar_url: avatarUrl });
       toast.success("Profile updated successfully");
     } catch (error: any) {
-      console.error("Profile update error detail:", {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-        url: error.config?.url,
-        method: error.config?.method
-      });
+      console.error("Profile update error detail:", error);
+      if (error.response) {
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+      }
       toast.error(error.response?.data?.error || "Failed to update profile");
     } finally {
       setIsSaving(false);

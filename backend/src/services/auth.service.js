@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { generateTokens, verifyRefreshToken } from '../utils/auth.utils.js';
+import { generateTokens, verifyRefreshToken, verifyToken } from '../utils/auth.utils.js';
 
 const prisma = new PrismaClient();
 
@@ -82,6 +82,7 @@ export const refresh = async (token) => {
         include: { 
           memberships: {
             where: {
+              is_active: true,
               workspace: {
                 is_active: true
               }
@@ -153,4 +154,54 @@ export const updateProfile = async (userId, data) => {
 
   const { password_hash: _, ...safeUser } = user;
   return safeUser;
+};
+
+export const acceptInvitation = async (token, { name, password }) => {
+  try {
+    // 1. Verify token
+    const decoded = verifyToken(token); // Invitation tokens share ACCESS_TOKEN_SECRET for convenience here, or we could add a new secret
+    
+    if (decoded.type !== 'invitation') {
+      throw new Error('Invalid invitation token');
+    }
+
+    // 2. Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // 3. Update user
+    const user = await prisma.user.update({
+      where: { id: decoded.userId },
+      data: {
+        name,
+        password_hash: passwordHash,
+        is_active: true
+      },
+      include: {
+        memberships: {
+          include: { workspace: true }
+        }
+      }
+    });
+
+    // 4. Generate tokens for automatic login
+    const { accessToken, refreshToken } = generateTokens(user);
+
+    // Store refresh token
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        user_id: user.id,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      }
+    });
+
+    const { password_hash: _, ...safeUser } = user;
+    return { user: safeUser, accessToken, refreshToken };
+  } catch (error) {
+    console.error('Accept Invitation Error:', error);
+    if (error.name === 'TokenExpiredError') {
+      throw new Error('Invitation has expired');
+    }
+    throw new Error('Invalid or expired invitation');
+  }
 };

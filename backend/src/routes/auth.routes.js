@@ -10,5 +10,6 @@ router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);
 router.get('/me', authenticateToken, authController.me);
 router.patch('/me', authenticateToken, authController.updateMe);
+router.post('/accept-invitation', authController.acceptInvitation);
 
 export default router;

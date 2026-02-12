@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { TeamSection } from "./TeamSection";
 
 export const ManagementHub = () => {
   const { switchWorkspace, user: currentUser } = useAuth();
@@ -21,10 +22,7 @@ export const ManagementHub = () => {
   const [editingWorkspace, setEditingWorkspace] = useState<any>(null);
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [configName, setConfigName] = useState("");
-  const [configMembers, setConfigMembers] = useState<any[]>([]);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [isInviting, setIsInviting] = useState(false);
 
   useEffect(() => {
     fetchWorkspaces();
@@ -65,16 +63,6 @@ export const ManagementHub = () => {
     setEditingWorkspace(ws);
     setConfigName(ws.name);
     setIsConfiguring(true);
-    fetchWorkspaceMembers(ws.id);
-  };
-
-  const fetchWorkspaceMembers = async (workspaceId: string) => {
-    try {
-      const res = await api.get(`/users/${workspaceId}/members`);
-      setConfigMembers(res.data.members || []);
-    } catch (error) {
-      console.error("Failed to fetch members", error);
-    }
   };
 
   const handleUpdateName = async () => {
@@ -89,49 +77,6 @@ export const ManagementHub = () => {
       toast.error("Failed to update identity");
     } finally {
       setIsSavingConfig(false);
-    }
-  };
-
-  const handleAddMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingWorkspace || !inviteEmail) return;
-    try {
-      setIsInviting(true);
-      console.log("Inviting personnel:", { workspaceId: editingWorkspace.id, email: inviteEmail });
-      const res = await api.post(`/users/${editingWorkspace.id}/members`, { 
-        email: inviteEmail,
-        role: 'MEMBER'
-      });
-      console.log("Invite response:", res.data);
-      toast.success("Personnel authorized");
-      setInviteEmail("");
-      fetchWorkspaceMembers(editingWorkspace.id);
-    } catch (error: any) {
-      console.error("Failed to add personnel detail:", {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-      toast.error(error.response?.data?.error || "Failed to add personnel");
-    } finally {
-      setIsInviting(false);
-    }
-  };
-
-  const handleRemoveMember = async (memberId: string) => {
-    if (!confirm("Revoke access for this user?")) return;
-    try {
-      console.log("Revoking access for memberId:", memberId);
-      await api.delete(`/users/members/${memberId}`);
-      toast.success("Access revoked");
-      if (editingWorkspace) fetchWorkspaceMembers(editingWorkspace.id);
-    } catch (error: any) {
-      console.error("Failed to remove personnel detail:", {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
-      toast.error(error.response?.data?.error || "Failed to remove personnel");
     }
   };
 
@@ -299,90 +244,8 @@ export const ManagementHub = () => {
               </div>
 
               {/* Personnel Section */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Personnel Management</h3>
-                  <span className="text-[9px] text-zinc-600 font-bold">{configMembers.length} Authorized Users</span>
-                </div>
-
-                <form onSubmit={handleAddMember} className="flex gap-3 mb-6">
-                  <Input 
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    className="h-12 bg-zinc-900 border-white/5 rounded-2xl font-bold text-white focus:ring-primary/20 flex-1"
-                    placeholder="Authorize by email..."
-                  />
-                  <Button 
-                    type="submit"
-                    disabled={isInviting || !inviteEmail}
-                    className="h-12 px-6 bg-primary text-black hover:bg-primary/90 font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-lg shadow-primary/5"
-                  >
-                    {isInviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
-                  </Button>
-                </form>
-
-                <div className="space-y-2">
-                  {configMembers.map((member, idx) => {
-                    const isMe = member.user?.id === currentUser?.id;
-                    return (
-                      <div key={idx} className={cn(
-                        "flex items-center justify-between p-4 rounded-2xl border transition-all group",
-                        isMe ? "bg-primary/5 border-primary/20" : "bg-white/[0.03] border-white/5 hover:border-white/10"
-                      )}>
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-9 h-9 rounded-full border flex items-center justify-center relative",
-                            isMe ? "bg-primary/20 border-primary/30" : "bg-zinc-800 border-white/10"
-                          )}>
-                            <span className={cn("text-[10px] font-black", isMe ? "text-primary" : "text-white")}>
-                              {member.user?.name?.[0] || member.user?.email?.[0]?.toUpperCase()}
-                            </span>
-                            {isMe && (
-                              <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full border-2 border-zinc-950 flex items-center justify-center" />
-                            )}
-                          </div>
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-white leading-none">{member.user?.name || 'Authorized Personnel'}</span>
-                              {isMe && (
-                                <Badge className="bg-primary/10 text-primary border-none font-black text-[7px] px-1.5 py-0.2 uppercase tracking-widest rounded-md">You</Badge>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-zinc-500 font-medium mt-1">{member.user?.email}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Badge className={cn(
-                            "border-none font-black text-[8px] px-2 py-0.5 rounded-md uppercase tracking-wider",
-                            member.role === 'ADMIN' ? "bg-red-500/10 text-red-400" : 
-                            member.role === 'OWNER' ? "bg-amber-500/10 text-amber-400" :
-                            "bg-zinc-800 text-zinc-400"
-                          )}>
-                            {member.role}
-                          </Badge>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            onClick={() => handleRemoveMember(member.id)}
-                            disabled={isMe && member.role === 'ADMIN'} // Prevent removing self if admin for now
-                            className={cn(
-                              "h-8 w-8 rounded-xl transition-all",
-                              isMe ? "opacity-20 cursor-not-allowed" : "hover:bg-red-500/10 text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100"
-                            )}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {configMembers.length === 0 && (
-                    <div className="py-8 text-center bg-white/[0.02] border border-dashed border-white/5 rounded-3xl">
-                      <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">No personnel assigned</p>
-                    </div>
-                  )}
-                </div>
+              <div className="pt-2">
+                <TeamSection workspaceId={editingWorkspace.id} mode="local" />
               </div>
             </div>
 

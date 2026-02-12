@@ -10,4 +10,8 @@ router.post('/:workspaceId/members', userController.createAndAddUser);
 router.patch('/members/:memberId', userController.updateMember);
 router.delete('/members/:memberId', userController.removeMember);
 
+// Global Personnel routes
+router.get('/personnel', userController.getPersonnel);
+router.delete('/:userId', userController.deactivateUser);
+
 export default router;
