@@ -28,7 +28,8 @@ import {
   Server,
   Network,
   Code,
-  PanelLeft
+  PanelLeft,
+  Pencil
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,13 @@ import {
 } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   ReactFlow,
   MiniMap,
   Controls,
@@ -66,6 +74,7 @@ import {
   Panel,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { automationService, Automation } from "@/lib/services/automationService";
 
 // --- MOCK DATA & TYPES ---
 
@@ -574,14 +583,166 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function AutomationsPage() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(INITIAL_NODES);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(INITIAL_EDGES);
   const [activeView, setActiveView] = useState<'library' | 'editor' | 'logs'>('library');
   const [isSaving, setIsSaving] = useState(false);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const openNamingDialog = (auto: Automation, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setCurrentAutomation(auto);
+    setAutomationName(auto.name);
+    setAutomationDescription(auto.description || "");
+    setIsNamingDialogOpen(true);
+  };
+
+  const [automations, setAutomations] = useState<Automation[]>([]);
+  const [currentAutomation, setCurrentAutomation] = useState<Automation | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Naming Dialog State
+  const [isNamingDialogOpen, setIsNamingDialogOpen] = useState(false);
+  const [automationName, setAutomationName] = useState("");
+  const [automationDescription, setAutomationDescription] = useState("");
+
+  // Load automations
+  const loadAutomations = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await automationService.list();
+      setAutomations(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load automation library");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeView === 'library') {
+      loadAutomations();
+    }
+  }, [activeView, loadAutomations]);
+
+  const forgeNewFlow = async () => {
+    try {
+      const newAuto = await automationService.create({
+        name: "Untitled Strategy",
+        nodes: INITIAL_NODES,
+        edges: INITIAL_EDGES,
+        status: 'Inactive'
+      });
+      setAutomations(prev => [newAuto, ...prev]);
+      setCurrentAutomation(newAuto);
+      setNodes(INITIAL_NODES);
+      setEdges(INITIAL_EDGES);
+      setActiveView('editor');
+      toast.success("New flow forged");
+    } catch (error) {
+      toast.error("Failed to forge new flow");
+    }
+  };
+
+  const selectAutomation = (auto: Automation) => {
+    setCurrentAutomation(auto);
+    setAutomationName(auto.name);
+    setNodes(auto.nodes as FlowNode[]);
+    setEdges(auto.edges as FlowEdge[]);
+    setActiveView('editor');
+  };
+
+  // Ensure viewport is set when instance is ready
+  useEffect(() => {
+    if (reactFlowInstance && currentAutomation?.viewport) {
+      reactFlowInstance.setViewport(currentAutomation.viewport);
+    }
+  }, [reactFlowInstance, currentAutomation]);
+
+  const handleStatusToggle = async (autoToUpdate?: Automation) => {
+    const target = autoToUpdate || currentAutomation;
+    if (!target) return;
+    
+    const newStatus = target.status === 'Active' ? 'Inactive' : 'Active';
+    try {
+      const updated = await automationService.update(target.id, { status: newStatus });
+      if (currentAutomation?.id === updated.id) setCurrentAutomation(updated);
+      setAutomations(prev => prev.map(a => a.id === updated.id ? updated : a));
+      toast.success(`${updated.name} is now ${newStatus}`);
+    } catch (error) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const updateMetadata = async () => {
+    if (!currentAutomation) return;
+    
+    setIsSaving(true);
+    try {
+      const updated = await automationService.update(currentAutomation.id, {
+        name: automationName,
+        description: automationDescription,
+      });
+      if (currentAutomation.id === updated.id) {
+        setCurrentAutomation(updated);
+        setAutomationName(updated.name);
+        setAutomationDescription(updated.description || "");
+      }
+      setAutomations(prev => prev.map(a => a.id === updated.id ? updated : a));
+      toast.success("Identity Updated");
+      setIsNamingDialogOpen(false);
+    } catch (error) {
+      toast.error("Failed to update identity");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveFlow = async (customName?: string) => {
+    if (!currentAutomation) return;
+    
+    // If it's the first time saving (Untitled) and no name provided, ask for it
+    if ((currentAutomation.name === "Untitled Strategy" || !currentAutomation.name) && !customName) {
+      setIsNamingDialogOpen(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const updated = await automationService.update(currentAutomation.id, {
+        name: automationName,
+        description: automationDescription,
+        nodes,
+        edges,
+        viewport: reactFlowInstance?.getViewport(),
+      });
+      setCurrentAutomation(updated);
+      setAutomationName(updated.name);
+      setAutomationDescription(updated.description || "");
+      setAutomations(prev => prev.map(a => a.id === updated.id ? updated : a));
+      toast.success("Strategy Synchronized");
+      setIsNamingDialogOpen(false);
+    } catch (error) {
+      toast.error("Failed to sync design");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const removeAutomation = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this flow? This action is permanent.")) return;
+    
+    try {
+      await automationService.delete(id);
+      setAutomations(prev => prev.filter(a => a.id !== id));
+      toast.success("Strategy deleted");
+    } catch (error) {
+      toast.error("Failed to delete flow");
+    }
+  };
   
   // Flow Palette state (Slim Icon Bar)
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false);
@@ -699,26 +860,12 @@ export default function AutomationsPage() {
     [reactFlowInstance, setNodes]
   );
 
-  const SAVED_FLOWS = [
-    { id: "flow-1", title: "Global VIP", stats: "89% success", status: "Live", icon: GitBranch },
-    { id: "flow-2", title: "Ghost Campaign", stats: "124 runs", status: "Draft", icon: MessageSquare },
-    { id: "flow-3", title: "Pulse Check", stats: "98.2% CTR", status: "Live", icon: Zap },
-  ];
-
   const FLOW_LOGS = [
     { id: "1", flow: "Global VIP", target: "A. Johnson", status: "Completed", result: "Order OK", time: "2m" },
     { id: "2", flow: "Global VIP", target: "M. Chen", status: "At Fork", result: "Wait Human", time: "5m" },
     { id: "3", flow: "Ghost Campaign", target: "S. Miller", status: "Active", result: "Intent Out", time: "12m" },
     { id: "4", flow: "Pulse Check", target: "E. Wilson", status: "Failed", result: "Rate Limit", time: "1h" },
   ];
-
-  const saveFlow = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      toast.success("Design Sync Complete");
-    }, 600);
-  };
 
   const deleteSelectedNode = () => {
     if (selectedNodeId) {
@@ -858,15 +1005,36 @@ export default function AutomationsPage() {
             )}
             
             {activeView === 'editor' ? (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setActiveView('library')}
-                className="h-8 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 text-zinc-400 group flex items-center gap-1.5"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span className="text-[11px] font-medium transition-transform group-hover:-translate-x-0.5">Library</span>
-              </Button>
+              <div className="flex items-center gap-4">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setActiveView('library')}
+                  className="h-8 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 text-zinc-400 group flex items-center gap-1.5"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="text-[11px] font-medium transition-transform group-hover:-translate-x-0.5">Library</span>
+                </Button>
+                
+                <div className="h-4 w-[1px] bg-white/10 mx-1" />
+                
+                <div className="flex flex-col">
+                  <input 
+                    type="text"
+                    value={automationName}
+                    onChange={(e) => setAutomationName(e.target.value)}
+                    onBlur={() => saveFlow(automationName)}
+                    className="bg-transparent border-none text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-primary/20 rounded px-1 -ml-1 transition-all w-48"
+                  />
+                  <div className="flex items-center gap-1.5 opacity-50">
+                    <div className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      currentAutomation?.status === 'Active' ? "bg-green-500" : "bg-zinc-400"
+                    )} />
+                    <span className="text-[9px] font-black uppercase tracking-widest">{currentAutomation?.status || 'Inactive'}</span>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="bg-zinc-900/50 p-0.5 rounded-lg flex gap-0.5 border border-white/5">
                 {(['library', 'logs'] as const).map(view => (
@@ -892,37 +1060,68 @@ export default function AutomationsPage() {
                   <DropdownMenuTrigger asChild>
                     <Button 
                       variant="outline" 
-                      className="h-8 px-3 rounded-lg bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20 hover:text-green-500 text-[11px] font-bold flex items-center gap-2"
+                      className={cn(
+                        "h-8 px-3 rounded-lg text-[11px] font-bold flex items-center gap-2 transition-all",
+                        currentAutomation?.status === 'Active' 
+                          ? "bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20" 
+                          : "bg-zinc-500/10 border-white/5 text-zinc-400 hover:bg-white/5"
+                      )}
                     >
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                      Live Status
+                      <div className={cn(
+                        "w-1.5 h-1.5 rounded-full animate-pulse",
+                        currentAutomation?.status === 'Active' ? "bg-green-500" : "bg-zinc-400"
+                      )} />
+                      {currentAutomation?.status === 'Active' ? 'Active Mode' : 'Inactive Mode'}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-white/5 rounded-xl p-1 shadow-2xl">
-                    <DropdownMenuItem onClick={saveFlow} className="rounded-lg text-[11px] font-medium py-2 focus:bg-white/5 transition-colors cursor-pointer">
-                      <Zap className="w-3.5 h-3.5 mr-2 text-primary" /> Sync Strategic Data
+                    <DropdownMenuItem 
+                      onClick={() => handleStatusToggle()} 
+                      className="rounded-lg text-[11px] font-medium py-2 focus:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      {currentAutomation?.status === 'Active' ? (
+                        <><Zap className="w-3.5 h-3.5 mr-2 text-zinc-400" /> Disable Flow</>
+                      ) : (
+                        <><Play className="w-3.5 h-3.5 mr-2 text-green-500" /> Activate Flow</>
+                      )}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-white/5" />
-                    <DropdownMenuItem onClick={() => setActiveView('library')} className="rounded-lg text-[11px] font-medium py-2 focus:bg-white/5 transition-colors cursor-pointer">
-                      <BarChart3 className="w-3.5 h-3.5 mr-2 text-blue-500" /> View Performance
+                    <DropdownMenuItem 
+                      onClick={saveFlow} 
+                      className="rounded-lg text-[11px] font-medium py-2 focus:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <Database className="w-3.5 h-3.5 mr-2 text-primary" /> Sync Structure
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-lg text-[11px] font-medium py-2 focus:bg-red-500/10 focus:text-red-500 transition-colors cursor-pointer">
-                      <Trash2 className="w-3.5 h-3.5 mr-2" /> Deactivate Flow
+                    <DropdownMenuItem 
+                      onClick={() => setActiveView('library')} 
+                      className="rounded-lg text-[11px] font-medium py-2 focus:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5 mr-2 text-blue-500" /> Performance
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={(e) => {
+                        if (currentAutomation) removeAutomation(currentAutomation.id, e as any);
+                        setActiveView('library');
+                      }} 
+                      className="rounded-lg text-[11px] font-medium py-2 focus:bg-red-500/10 focus:text-red-500 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete this flow
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 
                 <Button 
-                  onClick={saveFlow}
+                  onClick={() => saveFlow()}
                   size="sm"
                   className="h-8 px-4 rounded-lg bg-primary text-black font-bold text-[11px]"
+                  disabled={isSaving}
                 >
-                  Save Strategy
+                  {isSaving ? "Syncing..." : "Save Strategy"}
                 </Button>
               </div>
             ) : activeView === 'library' && (
               <Button 
-                onClick={() => setActiveView('editor')}
+                onClick={forgeNewFlow}
                 size="sm"
                 className="h-8 px-4 rounded-lg bg-primary text-black font-bold text-[11px] flex items-center gap-2"
               >
@@ -985,41 +1184,69 @@ export default function AutomationsPage() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {SAVED_FLOWS.map((flow) => (
+                    {automations.map((flow) => (
                       <div 
                         key={flow.id}
-                        onClick={() => setActiveView('editor')}
+                        onClick={() => selectAutomation(flow)}
                         className="p-6 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-primary/20 hover:bg-white/[0.02] transition-all cursor-pointer group relative overflow-hidden"
                       >
-                        <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <ArrowRight className="w-4 h-4 text-primary" />
+                        <div className="absolute top-0 right-0 p-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <button 
+                            onClick={(e) => openNamingDialog(flow, e)}
+                            className="p-2 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={(e) => removeAutomation(flow.id, e)}
+                            className="p-2 hover:bg-red-500/10 rounded-lg text-zinc-500 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                         
                         <div className="flex items-center gap-4 mb-6">
                           <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
-                            <flow.icon className="w-5 h-5 text-primary" />
+                            <GitBranch className="w-5 h-5 text-primary" />
                           </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-white group-hover:text-primary transition-colors">{flow.title}</h4>
-                            <span className="text-[10px] text-zinc-500 font-medium">Efficiency: {flow.stats}</span>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-bold text-white group-hover:text-primary transition-colors truncate">{flow.name}</h4>
+                            <span className="text-[10px] text-zinc-500 font-medium truncate italic block">{flow.description || 'No description'}</span>
                           </div>
                         </div>
                         
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline" className={cn(
-                            "rounded-md text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border-none",
-                            flow.status === "Live" ? "bg-green-500/10 text-green-500" : "bg-zinc-800 text-zinc-500"
-                          )}>
-                            {flow.status}
-                          </Badge>
-                          <div className="flex -space-x-1.5">
-                             {[1,2,3].map(i => (
-                               <div key={i} className="w-5 h-5 rounded-full border-2 border-[#050505] bg-zinc-800" />
-                             ))}
+                        <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/[0.03]">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusToggle(flow);
+                            }}
+                            className="group/badge"
+                          >
+                             <Badge variant="outline" className={cn(
+                              "rounded-md text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border-none transition-all group-hover/badge:scale-105",
+                              flow.status === "Active" ? "bg-green-500/10 text-green-500 group-hover/badge:bg-green-500/20" : "bg-zinc-800 text-zinc-500 group-hover/badge:bg-zinc-700"
+                            )}>
+                              {flow.status}
+                            </Badge>
+                          </button>
+                          
+                          <div className="flex items-center gap-3">
+                            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-tighter">
+                              {new Date(flow.updated_at).toLocaleDateString()}
+                            </span>
                           </div>
                         </div>
                       </div>
                     ))}
+                    
+                    {automations.length === 0 && !isLoading && (
+                      <div className="col-span-full py-20 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl">
+                        <Cpu className="w-12 h-12 text-zinc-700 mb-4 animate-pulse" />
+                        <h3 className="text-zinc-500 font-bold text-sm">No Automation Strategies Found</h3>
+                        <p className="text-zinc-600 text-xs mt-1">Forge your first flow to begin automation.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -1232,6 +1459,51 @@ export default function AutomationsPage() {
           </motion.div>
         </div>
       </div>
+
+      <Dialog open={isNamingDialogOpen} onOpenChange={setIsNamingDialogOpen}>
+        <DialogContent className="bg-zinc-950 border-white/5">
+          <DialogHeader>
+            <DialogTitle className="text-white">Give your strategy a name</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Strategy Name</label>
+              <Input 
+                value={automationName}
+                onChange={(e) => setAutomationName(e.target.value)}
+                placeholder="e.g. VIP Customer Welcome"
+                className="bg-zinc-900 border-white/10 text-white rounded-xl h-12"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Strategic Intent (Purpose)</label>
+              <textarea 
+                value={automationDescription}
+                onChange={(e) => setAutomationDescription(e.target.value)}
+                placeholder="Describe what this circuit achieves..."
+                className="w-full bg-zinc-900 border border-white/10 rounded-xl p-4 text-xs text-zinc-300 h-24 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none leading-relaxed"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="ghost" 
+              onClick={() => setIsNamingDialogOpen(false)}
+              className="text-zinc-500 hover:text-white"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => updateMetadata()}
+              className="bg-primary text-black font-bold px-8 rounded-xl"
+              disabled={!automationName || automationName === "Untitled Strategy"}
+            >
+              Save Configuration
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

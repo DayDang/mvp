@@ -7,6 +7,7 @@ import chatRoutes from './routes/chat.routes.js';
 import workspaceRoutes from './routes/workspace.routes.js';
 import userRoutes from './routes/user.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import automationRoutes from './routes/automation.routes.js';
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/automations', automationRoutes);
 
 /**
  * Health check

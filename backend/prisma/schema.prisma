@@ -44,8 +44,24 @@ model Workspace {
   updated_by    String?
   members       WorkspaceMember[]
   accounts      Account[]
+  automations   Automation[]
   created_at    DateTime          @default(now())
   updated_at    DateTime          @updatedAt
+}
+
+model Automation {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?
+  nodes           String    // JSON string
+  edges           String    // JSON string
+  viewport        String?   // JSON string
+  status          String    @default("Inactive")
+  is_active       Boolean   @default(true)
+  workspace_id    String
+  workspace       Workspace @relation(fields: [workspace_id], references: [id])
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
 }
 
 model WorkspaceMember {
