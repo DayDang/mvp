@@ -10,6 +10,8 @@ import authRoutes from './routes/auth.routes.js';
 import automationRoutes from './routes/automation.routes.js';
 import contactRoutes from './routes/contact.routes.js';
 import tagRoutes from './routes/tag.routes.js';
+import pulseTemplateRoutes from './routes/pulseTemplate.routes.js';
+import pulseRoutes from './routes/pulse.routes.js';
 
 const app = express();
 
@@ -49,6 +51,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/automations', automationRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/pulse-templates', pulseTemplateRoutes);
+app.use('/api/pulses', pulseRoutes);
+
 
 /**
  * Health check

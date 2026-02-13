@@ -47,6 +47,8 @@ model Workspace {
   automations   Automation[]
   contacts      Contact[]
   tags          Tag[]
+  pulseTemplates PulseTemplate[]
+  pulses        Pulse[]
   created_at    DateTime          @default(now())
   updated_at    DateTime          @updatedAt
 }
@@ -62,6 +64,9 @@ model Automation {
   is_active       Boolean   @default(true)
   workspace_id    String
   workspace       Workspace @relation(fields: [workspace_id], references: [id])
+  
+  pulses          Pulse[]
+  
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 }
@@ -175,4 +180,50 @@ model Tag {
 
   @@unique([name, workspace_id])
   @@index([workspace_id])
+}
+
+model PulseTemplate {
+  id            String    @id @default(uuid())
+  title         String
+  description   String?
+  content       String    // The message body
+  platforms     String?   // JSON string of platforms e.g., ["WHATSAPP", "INSTAGRAM"]
+  category      String?   // e.g., 'VIP Care', 'Retention'
+  reply_format  String?   // Utility option for reply format
+  workspace_id  String
+  workspace     Workspace @relation(fields: [workspace_id], references: [id])
+  pulses        Pulse[]
+  
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([workspace_id])
+}
+
+model Pulse {
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  message         String    // Final rendered message sent
+  platforms       String?   // JSON string of platforms e.g., ["WHATSAPP", "INSTAGRAM"]
+  status          String    @default("Sent") // Sent, Draft, Failed, Processing
+  
+  recipients      String    // JSON string of recipient names/IDs
+  metrics         String    // JSON string of { delivered, read, replied }
+  
+  workspace_id    String
+  workspace       Workspace @relation(fields: [workspace_id], references: [id])
+  
+  template_id     String?
+  template        PulseTemplate? @relation(fields: [template_id], references: [id])
+  
+  automation_id   String?
+  automation      Automation?    @relation(fields: [automation_id], references: [id])
+  
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@index([workspace_id])
+  @@index([template_id])
+  @@index([automation_id])
 }

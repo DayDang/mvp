@@ -17,6 +17,11 @@ export const listTags = async (workspaceId) => {
     where: {
       workspace_id: workspaceId
     },
+    include: {
+      _count: {
+        select: { contacts: true }
+      }
+    },
     orderBy: {
       name: 'asc'
     }

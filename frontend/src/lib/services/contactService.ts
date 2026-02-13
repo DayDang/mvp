@@ -4,6 +4,9 @@ export interface Tag {
   id: string;
   name: string;
   color: string;
+  _count?: {
+    contacts: number;
+  };
 }
 
 export interface Contact {

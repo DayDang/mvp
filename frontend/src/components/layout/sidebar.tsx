@@ -14,6 +14,7 @@ import {
   GitBranch,
   ArrowRightLeft,
   LogOut,
+  Layout,
   ChevronDown,
   Building2,
   Plug
@@ -45,6 +46,7 @@ const NAVIGATION = [
   { name: "Inbox", icon: Inbox, href: "/inbox" },
   { name: "Contacts", icon: Users, href: "/contacts" },
   { name: "Broadcasts", icon: Zap, href: "/broadcasts" },
+  { name: "Templates", icon: Layout, href: "/pulse-templates" },
   { name: "Automations", icon: GitBranch, href: "/automations" },
   { name: "Analytics", icon: BarChart3, href: "/analytics" },
 ];

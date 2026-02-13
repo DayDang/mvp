@@ -16,7 +16,9 @@ import {
   TrendingDown,
   MessageCircle,
   Brain,
-  History
+  History,
+  Pencil,
+  ArrowRight
 } from "lucide-react";
 import { 
   Table, 
@@ -83,14 +85,24 @@ export default function ContactsPage() {
   const [selectedTagFilters, setSelectedTagFilters] = useState<string[]>([]);
   const [selectedMessengerFilters, setSelectedMessengerFilters] = useState<string[]>([]);
 
-  const [newContact, setNewContact] = useState({
+  const [newContact, setNewContact] = useState<{
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    headline: string;
+    provider: string;
+    public_identifier: string;
+    tags: string[];
+  }>({
     first_name: "",
     last_name: "",
     email: "",
     phone: "",
     headline: "",
     provider: "WHATSAPP",
-    public_identifier: ""
+    public_identifier: "",
+    tags: []
   });
   
   const workspaceId = typeof window !== 'undefined' ? localStorage.getItem('currentWorkspaceId') || '' : '';
@@ -133,11 +145,11 @@ export default function ContactsPage() {
     e.preventDefault();
     if (!workspaceId) return;
     try {
-      await contactService.create(workspaceId, newContact);
+      await contactService.create(workspaceId, newContact as any);
       toast.success("Intelligence Record Created");
       setIsCreateDialogOpen(false);
       setNewContact({
-        first_name: "", last_name: "", email: "", phone: "", headline: "", provider: "WHATSAPP", public_identifier: ""
+        first_name: "", last_name: "", email: "", phone: "", headline: "", provider: "WHATSAPP", public_identifier: "", tags: []
       });
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
@@ -179,6 +191,15 @@ export default function ContactsPage() {
         tags: [...currentTags, tag]
       });
     }
+  };
+
+  const toggleTagForNewContact = (tagId: string) => {
+    setNewContact(prev => ({
+      ...prev,
+      tags: prev.tags.includes(tagId) 
+        ? prev.tags.filter(id => id !== tagId) 
+        : [...prev.tags, tagId]
+    }));
   };
 
   const handleAddTag = async () => {
@@ -589,32 +610,161 @@ export default function ContactsPage() {
 
       {/* Create Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="bg-zinc-950 border-white/5 text-white rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black uppercase">Initialize Record</DialogTitle>
-            <DialogDescription className="text-zinc-500 text-xs uppercase tracking-widest mt-1">Add new intelligence node</DialogDescription>
+        <DialogContent className="bg-zinc-950 border-white/10 text-white rounded-[32px] max-h-[95vh] overflow-y-auto w-full max-w-xl p-8 backdrop-blur-3xl shadow-2xl">
+          <DialogHeader className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2.5 bg-primary/10 rounded-xl">
+                <Plus className="w-5 h-5 text-primary" />
+              </div>
+              <DialogTitle className="text-2xl font-bold tracking-tight">Add Contact</DialogTitle>
+            </div>
+            <DialogDescription className="text-zinc-500 text-sm">
+              Create a new contact in your relationship hub to start tracking interactions.
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateContact} className="space-y-4 py-4">
+          <form onSubmit={handleCreateContact} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase font-black text-zinc-500">First Name</Label>
-                <Input required value={newContact.first_name} onChange={e => setNewContact({...newContact, first_name: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">First Name</Label>
+                <div className="relative group">
+                  <Input 
+                    required 
+                    placeholder="John"
+                    value={newContact.first_name} 
+                    onChange={e => setNewContact({...newContact, first_name: e.target.value})} 
+                    className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase font-black text-zinc-500">Last Name</Label>
-                <Input value={newContact.last_name} onChange={e => setNewContact({...newContact, last_name: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Last Name</Label>
+                <Input 
+                  placeholder="Doe"
+                  value={newContact.last_name} 
+                  onChange={e => setNewContact({...newContact, last_name: e.target.value})} 
+                  className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                />
               </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase font-black text-zinc-500">Email</Label>
-              <Input type="email" value={newContact.email} onChange={e => setNewContact({...newContact, email: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Email Address</Label>
+                <Input 
+                  type="email" 
+                  placeholder="john@example.com"
+                  value={newContact.email} 
+                  onChange={e => setNewContact({...newContact, email: e.target.value})} 
+                  className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Platform</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full bg-white/5 border-white/5 rounded-xl h-11 text-left justify-between px-4 font-bold hover:bg-white/10 transition-all">
+                      <div className="flex items-center gap-2">
+                        {newContact.provider && PLATFORM_ICONS[newContact.provider.toLowerCase() as keyof typeof PLATFORM_ICONS]}
+                        <span className="capitalize">{newContact.provider.toLowerCase()}</span>
+                      </div>
+                      <MoreVertical className="w-3.5 h-3.5 opacity-40 rotate-90" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-zinc-900 border-white/10 text-zinc-300 rounded-xl p-1.5 w-48 shadow-2xl backdrop-blur-xl">
+                    <DropdownMenuItem className="rounded-lg gap-2 py-2" onClick={() => setNewContact({...newContact, provider: "WHATSAPP"})}>
+                      <div className="p-1.5 bg-green-500/10 rounded-md">
+                        <MessageSquare className="w-3.5 h-3.5 text-green-500" />
+                      </div>
+                      <span className="font-bold text-xs">WhatsApp</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg gap-2 py-2" onClick={() => setNewContact({...newContact, provider: "INSTAGRAM"})}>
+                      <div className="p-1.5 bg-pink-500/10 rounded-md">
+                        <Instagram className="w-3.5 h-3.5 text-pink-500" />
+                      </div>
+                      <span className="font-bold text-xs">Instagram</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg gap-2 py-2" onClick={() => setNewContact({...newContact, provider: "TELEGRAM"})}>
+                      <div className="p-1.5 bg-blue-500/10 rounded-md">
+                        <Send className="w-3.5 h-3.5 text-blue-500" />
+                      </div>
+                      <span className="font-bold text-xs">Telegram</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase font-black text-zinc-500">Headline</Label>
-              <Input value={newContact.headline} onChange={e => setNewContact({...newContact, headline: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-zinc-400 ml-1">Headline / Description</Label>
+              <Input 
+                placeholder="Product Designer at Acme Corp"
+                value={newContact.headline} 
+                onChange={e => setNewContact({...newContact, headline: e.target.value})} 
+                className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+              />
             </div>
-            <DialogFooter className="pt-4">
-              <Button type="submit" className="bg-primary text-black font-bold rounded-xl h-12 w-full">Deploy Agent</Button>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Phone Number</Label>
+                <Input 
+                  placeholder="+1 (555) 000-0000"
+                  value={newContact.phone} 
+                  onChange={e => setNewContact({...newContact, phone: e.target.value})} 
+                  className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Public Handle / ID</Label>
+                <Input 
+                  placeholder="@username"
+                  value={newContact.public_identifier} 
+                  onChange={e => setNewContact({...newContact, public_identifier: e.target.value})} 
+                  className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-xs font-bold text-zinc-400 ml-1">Assign Tags</Label>
+              <div className="flex flex-wrap gap-2 p-4 bg-white/[0.03] border border-white/5 rounded-2xl min-h-[100px]">
+                {tagList.map((tag) => {
+                  const isActive = newContact.tags.includes(tag.id);
+                  return (
+                    <Badge 
+                      key={tag.id}
+                      onClick={() => toggleTagForNewContact(tag.id)}
+                      className={cn(
+                        "cursor-pointer px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all border",
+                        isActive 
+                          ? "bg-primary text-black border-primary shadow-[0_0_15px_rgba(var(--primary),0.3)]" 
+                          : "bg-white/5 text-zinc-500 border-white/5 hover:border-white/20"
+                      )}
+                    >
+                      {tag.name}
+                    </Badge>
+                  );
+                })}
+                {tagList.length === 0 && (
+                  <div className="text-[10px] text-zinc-600 font-bold uppercase w-full text-center py-4 italic">
+                    No tags available. Manage tags in the sidebar first.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="pt-6 border-t border-white/5 gap-2">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => setIsCreateDialogOpen(false)}
+                className="h-11 rounded-xl px-6 font-bold text-zinc-400 hover:text-white"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-primary text-black font-bold rounded-xl h-11 px-8 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                 Create Contact
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -622,43 +772,77 @@ export default function ContactsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="bg-zinc-950 border-white/5 text-white rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black uppercase">Update Record</DialogTitle>
+        <DialogContent className="bg-zinc-950 border-white/10 text-white rounded-[32px] max-h-[95vh] overflow-y-auto w-full max-w-xl p-8 backdrop-blur-3xl shadow-2xl">
+          <DialogHeader className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2.5 bg-primary/10 rounded-xl">
+                <Pencil className="w-5 h-5 text-primary" />
+              </div>
+              <DialogTitle className="text-2xl font-bold tracking-tight">Edit Contact</DialogTitle>
+            </div>
+            <DialogDescription className="text-zinc-500 text-sm">
+              Update the contact details and adjust their intelligence tags.
+            </DialogDescription>
           </DialogHeader>
           {editingContact && (
-            <form onSubmit={handleUpdateContact} className="space-y-4 py-4">
+            <form onSubmit={handleUpdateContact} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-black text-zinc-500">First Name</Label>
-                  <Input required value={editingContact.first_name || ""} onChange={e => setEditingContact({...editingContact, first_name: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-zinc-400 ml-1">First Name</Label>
+                  <Input 
+                    required 
+                    value={editingContact.first_name || ""} 
+                    onChange={e => setEditingContact({...editingContact, first_name: e.target.value})} 
+                    className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                  />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-black text-zinc-500">Last Name</Label>
-                  <Input value={editingContact.last_name || ""} onChange={e => setEditingContact({...editingContact, last_name: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-zinc-400 ml-1">Last Name</Label>
+                  <Input 
+                    value={editingContact.last_name || ""} 
+                    onChange={e => setEditingContact({...editingContact, last_name: e.target.value})} 
+                    className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                  />
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase font-black text-zinc-500">Email</Label>
-                <Input type="email" value={editingContact.email || ""} onChange={e => setEditingContact({...editingContact, email: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Email Address</Label>
+                <Input 
+                  type="email" 
+                  value={editingContact.email || ""} 
+                  onChange={e => setEditingContact({...editingContact, email: e.target.value})} 
+                  className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                />
               </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase font-black text-zinc-500">Headline</Label>
-                <Input value={editingContact.headline || ""} onChange={e => setEditingContact({...editingContact, headline: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Headline / Description</Label>
+                <Input 
+                  value={editingContact.headline || ""} 
+                  onChange={e => setEditingContact({...editingContact, headline: e.target.value})} 
+                  className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-black text-zinc-500">Phone</Label>
-                  <Input value={editingContact.phone || ""} onChange={e => setEditingContact({...editingContact, phone: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-zinc-400 ml-1">Phone Number</Label>
+                  <Input 
+                    value={editingContact.phone || ""} 
+                    onChange={e => setEditingContact({...editingContact, phone: e.target.value})} 
+                    className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                  />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-black text-zinc-500">Handle / ID</Label>
-                  <Input value={editingContact.public_identifier || ""} onChange={e => setEditingContact({...editingContact, public_identifier: e.target.value})} className="bg-white/5 border-white/5 rounded-xl h-12" />
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-zinc-400 ml-1">Public Handle / ID</Label>
+                  <Input 
+                    value={editingContact.public_identifier || ""} 
+                    onChange={e => setEditingContact({...editingContact, public_identifier: e.target.value})} 
+                    className="bg-white/5 border-white/5 rounded-xl h-11 pl-4 focus:border-primary/50 transition-all font-medium" 
+                  />
                 </div>
               </div>
               <div className="space-y-3">
-                <Label className="text-[10px] uppercase font-black text-zinc-500">Assign Intelligence Tags</Label>
-                <div className="flex flex-wrap gap-2 p-4 bg-white/[0.03] border border-white/5 rounded-2xl min-h-[80px]">
+                <Label className="text-xs font-bold text-zinc-400 ml-1">Assign Tags</Label>
+                <div className="flex flex-wrap gap-2 p-4 bg-white/[0.03] border border-white/5 rounded-2xl min-h-[100px]">
                   {tagList.map((tag) => {
                     const isActive = editingContact.tags?.some(t => t.id === tag.id);
                     return (
@@ -666,9 +850,9 @@ export default function ContactsPage() {
                         key={tag.id}
                         onClick={() => toggleTagForEditingContact(tag)}
                         className={cn(
-                          "cursor-pointer px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all",
+                          "cursor-pointer px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all border",
                           isActive 
-                            ? "bg-primary text-black border-primary" 
+                            ? "bg-primary text-black border-primary shadow-[0_0_15px_rgba(var(--primary),0.3)]" 
                             : "bg-white/5 text-zinc-500 border-white/5 hover:border-white/20"
                         )}
                       >
@@ -678,13 +862,23 @@ export default function ContactsPage() {
                   })}
                   {tagList.length === 0 && (
                     <div className="text-[10px] text-zinc-600 font-bold uppercase w-full text-center py-4 italic">
-                      No tags available. Manifest tags in the sidebar first.
+                      No tags available. Manage tags in the sidebar first.
                     </div>
                   )}
                 </div>
               </div>
-              <DialogFooter className="pt-4">
-                <Button type="submit" className="bg-primary text-black font-bold rounded-xl h-12 w-full">Apply Updates</Button>
+              <DialogFooter className="pt-6 border-t border-white/5 gap-2">
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={() => setIsEditDialogOpen(false)}
+                  className="h-11 rounded-xl px-6 font-bold text-zinc-400 hover:text-white"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-primary text-black font-bold rounded-xl h-11 px-8 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                  Save Changes
+                </Button>
               </DialogFooter>
             </form>
           )}
