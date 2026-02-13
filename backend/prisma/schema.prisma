@@ -45,6 +45,8 @@ model Workspace {
   members       WorkspaceMember[]
   accounts      Account[]
   automations   Automation[]
+  contacts      Contact[]
+  tags          Tag[]
   created_at    DateTime          @default(now())
   updated_at    DateTime          @updatedAt
 }
@@ -130,4 +132,47 @@ model Message {
   updated_by      String?
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
+}
+
+model Contact {
+  id                  String    @id @default(uuid())
+  unipile_id          String?   @unique // The 'id' in unipile profile response
+  workspace_id        String
+  workspace           Workspace @relation(fields: [workspace_id], references: [id])
+  provider            String?   // e.g., 'LINKEDIN', 'WHATSAPP'
+  public_identifier   String?   // e.g., LinkedIn handle
+  first_name          String?
+  last_name           String?
+  headline            String?
+  summary             String?
+  location            String?
+  profile_picture_url String?
+  email               String?
+  phone               String?
+  
+  // Interaction State
+  invitation_status   String?   // SENT, RECEIVED, PENDING, ACCEPTED
+  
+  tags                Tag[]     @relation("ContactTags")
+  
+  is_active           Boolean   @default(true)
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  @@index([workspace_id])
+}
+
+model Tag {
+  id            String    @id @default(uuid())
+  name          String
+  color         String?   @default("#71717a") // Zinc-500 default
+  workspace_id  String
+  workspace     Workspace @relation(fields: [workspace_id], references: [id])
+  contacts      Contact[] @relation("ContactTags")
+  
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@unique([name, workspace_id])
+  @@index([workspace_id])
 }

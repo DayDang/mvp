@@ -100,3 +100,22 @@ export const deleteAccount = async (accountId) => {
     throw error;
   }
 };
+
+/**
+ * Fetch a contact profile from Unipile
+ * Ref: https://developer.unipile.com/reference/userscontroller_getprofilebyidentifier
+ */
+export const getContactProfile = async (identifier, accountId = null) => {
+  try {
+    const params = { identifier };
+    if (accountId) params.account_id = accountId;
+    
+    // Using the SDK method that matches the endpoint
+    // Note: client.users might vary depending on SDK version, fallback to manual fetch if needed
+    const profile = await client.users.getProfile(params);
+    return profile;
+  } catch (error) {
+    console.error('Unipile Service Error (getContactProfile):', error);
+    throw error;
+  }
+};
