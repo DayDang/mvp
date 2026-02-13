@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback, useRef, useEffect } from "react";
 import { 
   Plus, 
   Search, 
@@ -25,7 +26,9 @@ import {
   FileSpreadsheet,
   Globe,
   Server,
-  Network
+  Network,
+  Code,
+  PanelLeft
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -51,6 +54,7 @@ import {
   MiniMap,
   Controls,
   Background,
+  BackgroundVariant,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -65,57 +69,27 @@ import "@xyflow/react/dist/style.css";
 
 // --- MOCK DATA & TYPES ---
 
-type NodeType = "trigger" | "action" | "condition" | "ai" | "integration";
-
-const ICONS_MAP: Record<string, any> = {
-  MessageSquare,
-  Database,
-  Clock,
-  GitBranch,
-  UserCheck,
-  Cpu,
-  Brain,
-  Layers,
-  Send,
-  Plus,
-  Zap,
-  MessageCircle,
-  FileSpreadsheet,
-  Globe,
-  Server,
-  Network
-};
-
-const NODE_PALETTE = [
-  { category: "Triggers", items: [
-    { type: "trigger" as const, title: "New Message", icon: "MessageSquare", desc: "Reply received", docs: "Triggers instantly when an inbound message is received via WhatsApp, Instagram, or Telegram. Best used for Quick Replies or initial engagement." },
-    { type: "trigger" as const, title: "CRM Tag Added", icon: "Database", desc: "Manual tagging", docs: "Activates when a specific tag is manually or through another flow applied to a client. Use this to follow-up on manual segmentations." },
-    { type: "trigger" as const, title: "Wait Timer", icon: "Clock", desc: "Schedule delay", docs: "Holds the execution for a set duration (minutes, hours, days). Crucial for multi-day outreach sequences." },
-  ]},
-  { category: "Logic", items: [
-    { type: "condition" as const, title: "Platform Match", icon: "GitBranch", desc: "Check IG/WA/TG", docs: "Diverges the path based on the origin platform. Essential for platform-specific content like IG Story mentions." },
-    { type: "condition" as const, title: "CRM Lookup", icon: "UserCheck", desc: "Segment check", docs: "Queries the database to check client tier, sentiment, or lifetime value. Use this to escalate VIPs to humans early." },
-  ]},
-  { category: "Intelligence", items: [
-    { type: "ai" as const, title: "Analyze Intent", icon: "Cpu", desc: "GPT-4o detection", docs: "Uses GPT-4o to categorize message intent (Question, Complaint, Order). Foundation for intelligent routing." },
-    { type: "ai" as const, title: "The Fork", icon: "Brain", desc: "AI vs Human offer", docs: "Strategic logic that decides if a lead is worth AI-automation or requires a High-Touch human specialist." },
-    { type: "ai" as const, title: "Draft Response", icon: "Layers", desc: "Shadow copywriter", docs: "Generates a high-conversion shadow-response for human review. Perfect for maintaining brand voice at scale." },
-  ]},
-  { category: "Actions", items: [
-    { type: "action" as const, title: "Send Message", icon: "Send", desc: "Dispatch content", docs: "Dispatches text, images, or media to the client. The core output of any automation flow." },
-    { type: "action" as const, title: "Add CRM Tag", icon: "Plus", desc: "Automation mark", docs: "Automatically marks the client's file. Strategic for building long-term data regarding client behavior." },
-    { type: "action" as const, title: "Handover", icon: "Zap", desc: "Transfer to human", docs: "Instantly transfers the conversation to the Active Inbox for a human specialist. Use for complex negotiations." },
-  ]},
-  { category: "MCP Tools (Methods)", items: [
-    { type: "integration" as const, title: "slack_post_message", icon: "MessageCircle", desc: "Post to Slack channel", docs: "Calls the Slack MCP method to post a formatted message. Requires 'channel' and 'text' parameters." },
-    { type: "integration" as const, title: "sheets_append_row", icon: "FileSpreadsheet", desc: "Add data to sheet", docs: "Calls the Google Sheets MCP method to append a new row. Requires 'sheetId' and 'values' array." },
-    { type: "integration" as const, title: "http_post_webhook", icon: "Globe", desc: "Generic Webhook POST", docs: "Calls the Fetch MCP method to send an HTTP POST request. Perfect for connecting to legacy custom systems." },
-    { type: "integration" as const, title: "db_insert_client", icon: "Server", desc: "Direct DB Write", docs: "Calls the Database MCP method to insert or update client records directly in your system of truth." },
-    { type: "integration" as const, title: "hubspot_sync_contact", icon: "Network", desc: "CRM Contact Sync", docs: "Calls the HubSpot MCP method to synchronize customer data and update deal stages based on flow results." },
-  ]}
-];
+type NodeType = "trigger" | "action" | "condition" | "ai" | "integration" | "start";
 
 // --- CUSTOM NODE COMPONENTS ---
+
+const ScrollbarStyles = () => (
+  <style jsx global>{`
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  `}</style>
+);
 
 const CustomFlowNode = ({ data, selected }: { data: any, selected?: boolean }) => {
   const Icon = typeof data.icon === 'string' ? ICONS_MAP[data.icon] : data.icon;
@@ -124,10 +98,10 @@ const CustomFlowNode = ({ data, selected }: { data: any, selected?: boolean }) =
 
   return (
     <div className={cn(
-      "p-5 rounded-3xl bg-[#09090b] border backdrop-blur-2xl w-60 transition-shadow",
-      selected ? "border-primary/50 ring-4 ring-primary/5 shadow-2xl" : "border-white/10 shadow-lg hover:border-white/20"
+      "p-4 rounded-2xl bg-zinc-900/80 border backdrop-blur-2xl w-56 transition-all",
+      selected ? "border-primary ring-4 ring-primary/5 shadow-2xl scale-[1.02]" : "border-white/5 shadow-lg hover:border-white/10"
     )}>
-      {!isTrigger && (
+      {data.type !== "start" && (
         <Handle
           type="target"
           position={Position.Left}
@@ -138,21 +112,20 @@ const CustomFlowNode = ({ data, selected }: { data: any, selected?: boolean }) =
       <div className="flex items-center justify-between mb-4">
         <div className={cn(
           "p-2.5 rounded-xl border",
+          data.type === "start" ? "bg-green-500/10 text-green-500 border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]" :
           isTrigger ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
           data.type === "action" ? "bg-primary/10 text-primary border-primary/20" :
           data.type === "condition" ? "bg-blue-500/10 text-blue-500 border-blue-500/20" :
           data.type === "integration" ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" :
           "bg-purple-500/10 text-purple-500 border-purple-500/20"
         )}>
-          <Icon className="w-5 h-5" />
+          <Icon className={cn("w-5 h-5", data.type === "start" && "animate-pulse")} />
         </div>
         <div className="flex items-center gap-1">
-          {data.type === "integration" && (
-            <Badge variant="outline" className="rounded-lg text-[7px] font-black uppercase tracking-tighter py-0 px-1 bg-cyan-500/10 border-cyan-500/20 text-cyan-400 mr-1">
-              MCP tool
-            </Badge>
-          )}
-          <Badge variant="outline" className="rounded-lg text-[8px] font-black uppercase tracking-widest py-0 px-2 bg-white/5 border-white/5 text-zinc-500">
+          <Badge variant="outline" className={cn(
+            "rounded-lg text-[8px] font-black uppercase tracking-widest py-0 px-2 border-white/5",
+            data.type === "start" ? "bg-green-500/10 text-green-500" : "bg-white/5 text-zinc-500"
+          )}>
             {data.type}
           </Badge>
         </div>
@@ -184,114 +157,120 @@ const ConfigSection = ({ title, children }: { title: string, children: React.Rea
 );
 
 const TriggerConfig = ({ node, onUpdate }: { node: any, onUpdate: (data: any) => void }) => {
-  const isWait = node.data.label === "Wait Timer";
-  
   return (
     <div className="space-y-6">
       <ConfigSection title="Trigger Settings">
-        {isWait ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Duration</span>
-              <Input 
-                type="number"
-                value={node.data.duration || 1}
-                onChange={(e) => onUpdate({ duration: e.target.value })}
-                className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
-              />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Unit</span>
-              <select 
-                className="w-full bg-zinc-950 border border-white/5 rounded-xl h-10 px-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none"
-                value={node.data.unit || "min"}
-                onChange={(e) => onUpdate({ unit: e.target.value })}
-              >
-                <option value="min">Minutes</option>
-                <option value="hour">Hours</option>
-                <option value="day">Days</option>
-              </select>
+        <div className="space-y-4">
+          <div>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Platform Filter</span>
+            <div className="flex gap-2">
+              {["WhatsApp", "Instagram", "Telegram"].map(p => (
+                <button
+                  key={p}
+                  onClick={() => onUpdate({ platform: p })}
+                  className={cn(
+                    "flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all",
+                    node.data.platform === p ? "bg-primary/20 border-primary/40 text-primary" : "bg-white/5 border-white/5 text-zinc-500 hover:text-white"
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Platform Filter</span>
-              <div className="flex gap-2">
-                {["WhatsApp", "Instagram", "Telegram"].map(p => (
-                  <button
-                    key={p}
-                    onClick={() => onUpdate({ platform: p })}
-                    className={cn(
-                      "flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all",
-                      node.data.platform === p ? "bg-primary/20 border-primary/40 text-primary" : "bg-white/5 border-white/5 text-zinc-500 hover:text-white"
-                    )}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Keyword Trigger (Optional)</span>
-              <Input 
-                placeholder="e.g. #VIP, order, help"
-                value={node.data.keywords || ""}
-                onChange={(e) => onUpdate({ keywords: e.target.value })}
-                className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
-              />
-            </div>
+          <div>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Keyword Trigger (Optional)</span>
+            <Input 
+              placeholder="e.g. #VIP, order, help"
+              value={node.data.keywords || ""}
+              onChange={(e) => onUpdate({ keywords: e.target.value })}
+              className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
+            />
           </div>
-        )}
+        </div>
       </ConfigSection>
     </div>
   );
 };
 
-const ConditionConfig = ({ node, onUpdate }: { node: any, onUpdate: (data: any) => void }) => (
-  <ConfigSection title="Logic Conditions">
-    <div>
-      <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">CRM Property</span>
-      <select 
-        className="w-full bg-zinc-950 border border-white/5 rounded-xl h-10 px-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none mb-4"
-        value={node.data.field || "tier"}
-        onChange={(e) => onUpdate({ field: e.target.value })}
-      >
-        <option value="tier">Client Tier</option>
-        <option value="sentiment">Sentiment Score</option>
-        <option value="lifetime_value">LTV (Lifetime Value)</option>
-        <option value="last_purchase">Last Purchase Date</option>
-      </select>
-      
-      <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Operator</span>
-      <select 
-        className="w-full bg-zinc-950 border border-white/5 rounded-xl h-10 px-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none mb-4"
-        value={node.data.operator || "equals"}
-        onChange={(e) => onUpdate({ operator: e.target.value })}
-      >
-        <option value="equals">Equals</option>
-        <option value="greater_than">Greater Than</option>
-        <option value="less_than">Less Than</option>
-        <option value="contains">Contains</option>
-      </select>
+const ConditionConfig = ({ node, onUpdate }: { node: any, onUpdate: (data: any) => void }) => {
+  const isWait = node.data.label === "Wait Timer";
 
-      <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Match Value</span>
-      <Input 
-        value={node.data.value || ""}
-        onChange={(e) => onUpdate({ value: e.target.value })}
-        className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
-      />
-    </div>
-  </ConfigSection>
-);
+  if (isWait) {
+    return (
+      <ConfigSection title="Delay Settings">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Duration</span>
+            <Input 
+              type="number"
+              value={node.data.duration || 1}
+              onChange={(e) => onUpdate({ duration: e.target.value })}
+              className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
+            />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Unit</span>
+            <select 
+              className="w-full bg-zinc-950 border border-white/5 rounded-xl h-10 px-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none"
+              value={node.data.unit || "min"}
+              onChange={(e) => onUpdate({ unit: e.target.value })}
+            >
+              <option value="min">Minutes</option>
+              <option value="hour">Hours</option>
+              <option value="day">Days</option>
+            </select>
+          </div>
+        </div>
+      </ConfigSection>
+    );
+  }
+
+  return (
+    <ConfigSection title="Logic Conditions">
+      <div>
+        <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">CRM Property</span>
+        <select 
+          className="w-full bg-zinc-950 border border-white/5 rounded-xl h-10 px-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none mb-4"
+          value={node.data.field || "tier"}
+          onChange={(e) => onUpdate({ field: e.target.value })}
+        >
+          <option value="tier">Client Tier</option>
+          <option value="sentiment">Sentiment Score</option>
+          <option value="lifetime_value">LTV (Lifetime Value)</option>
+          <option value="last_purchase">Last Purchase Date</option>
+        </select>
+        
+        <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Operator</span>
+        <select 
+          className="w-full bg-zinc-950 border border-white/5 rounded-xl h-10 px-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none mb-4"
+          value={node.data.operator || "equals"}
+          onChange={(e) => onUpdate({ operator: e.target.value })}
+        >
+          <option value="equals">Equals</option>
+          <option value="greater_than">Greater Than</option>
+          <option value="less_than">Less Than</option>
+          <option value="contains">Contains</option>
+        </select>
+
+        <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Match Value</span>
+        <Input 
+          value={node.data.value || ""}
+          onChange={(e) => onUpdate({ value: e.target.value })}
+          className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
+        />
+      </div>
+    </ConfigSection>
+  );
+};
 
 const AIConfig = ({ node, onUpdate }: { node: any, onUpdate: (data: any) => void }) => {
-  const isFork = node.data.label === "The Fork";
+  const isTriage = node.data.label === "AI Triage";
   const isIntent = node.data.label === "Analyze Intent";
   
   return (
     <ConfigSection title="AI Parameter Strategy">
-      {isFork ? (
+      {isTriage ? (
         <div className="space-y-4">
           <div>
             <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Human Switch Threshold</span>
@@ -402,113 +381,84 @@ const ActionConfig = ({ node, onUpdate }: { node: any, onUpdate: (data: any) => 
   );
 };
 
-const MCPConfig = ({ node, onUpdate }: { node: any, onUpdate: (data: any) => void }) => {
-  const [isTesting, setIsTesting] = useState(false);
-
-  const handleTestConnection = () => {
-    setIsTesting(true);
-    setTimeout(() => {
-      setIsTesting(false);
-      toast.success(`${node.data.label} Connection Verified`, {
-        description: "MCP server returned handshake: 200 OK"
-      });
-    }, 1500);
-  };
-
+const HTTPRequestConfig = ({ node, onUpdate }: { node: any, onUpdate: (data: any) => void }) => {
   return (
     <div className="space-y-6">
-      <ConfigSection title="Integration Settings">
+      <ConfigSection title="Request Definition">
         <div className="space-y-4">
-          <div>
-            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">MCP Endpoint</span>
-            <Input 
-              placeholder="e.g. http://localhost:3000/mcp"
-              value={node.data.endpoint || ""}
-              onChange={(e) => onUpdate({ endpoint: e.target.value })}
-              className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
-            />
+          <div className="grid grid-cols-4 gap-2">
+            <div className="col-span-1">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Method</span>
+              <select 
+                className="w-full bg-zinc-950 border border-white/5 rounded-xl h-10 px-2 text-[10px] text-white focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none font-bold"
+                value={node.data.method || "POST"}
+                onChange={(e) => onUpdate({ method: e.target.value })}
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+            </div>
+            <div className="col-span-3">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Endpoint URL</span>
+              <Input 
+                placeholder="https://api.yourservice.com/v1/hook"
+                value={node.data.url || ""}
+                onChange={(e) => onUpdate({ url: e.target.value })}
+                className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
+              />
+            </div>
           </div>
           <div>
-            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Access Token / Secret</span>
-            <Input 
-              type="password"
-              placeholder="••••••••••••••••"
-              value={node.data.secret || ""}
-              onChange={(e) => onUpdate({ secret: e.target.value })}
-              className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
+            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Headers (JSON)</span>
+            <textarea 
+              className="w-full bg-zinc-950 border border-white/5 rounded-xl p-3 text-xs text-zinc-400 h-20 focus:outline-none focus:ring-1 focus:ring-primary/20 font-mono resize-none"
+              placeholder='{ "Authorization": "Bearer {{api_key}}" }'
+              value={node.data.headers || ""}
+              onChange={(e) => onUpdate({ headers: e.target.value })}
             />
           </div>
-          <Button 
-            onClick={handleTestConnection}
-            disabled={isTesting}
-            variant="outline"
-            className="w-full h-10 rounded-xl border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300 transition-all font-bold text-xs"
-          >
-            {isTesting ? "Handshaking..." : "Test MCP Context"}
-          </Button>
         </div>
       </ConfigSection>
 
-      <ConfigSection title="Tool Parameters">
+      {node.data.method !== "GET" && (
+        <ConfigSection title="Body Builder">
+          <div className="space-y-2">
+            <textarea 
+              className="w-full bg-zinc-950 border border-white/5 rounded-xl p-3 text-xs text-zinc-200 h-32 focus:outline-none focus:ring-1 focus:ring-primary/20 font-mono resize-none"
+              placeholder='{ "user_id": "{{user.id}}", "event": "flow_triggered" }'
+              value={node.data.body || ""}
+              onChange={(e) => onUpdate({ body: e.target.value })}
+            />
+            <p className="text-[9px] text-zinc-600 italic">Use double braces {"{{variable}}"} to inject flow context.</p>
+          </div>
+        </ConfigSection>
+      )}
+
+      <ConfigSection title="Response Mapping">
         <div className="space-y-4">
-          {node.data.label === "slack_post_message" ? (
-            <>
-              <div>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Target Channel</span>
-                <Input 
-                  placeholder="#alerts, #general"
-                  value={node.data.channel || ""}
-                  onChange={(e) => onUpdate({ channel: e.target.value })}
-                  className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
-                />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Message Template</span>
-                <textarea 
-                  className="w-full bg-zinc-950 border border-white/5 rounded-xl p-3 text-xs text-zinc-200 h-24 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none"
-                  placeholder="Hello team, {{user_name}} just triggered a flow..."
-                  value={node.data.template || ""}
-                  onChange={(e) => onUpdate({ template: e.target.value })}
-                />
-              </div>
-            </>
-          ) : node.data.label === "sheets_append_row" ? (
-            <>
-              <div>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Spreadsheet ID</span>
-                <Input 
-                  placeholder="1BxiMVs0XRA5nFMdKvBdB..."
-                  value={node.data.sheetId || ""}
-                  onChange={(e) => onUpdate({ sheetId: e.target.value })}
-                  className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
-                />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Range / Tab Name</span>
-                <Input 
-                  placeholder="Sheet1!A:E"
-                  value={node.data.range || ""}
-                  onChange={(e) => onUpdate({ range: e.target.value })}
-                  className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
-                />
-              </div>
-            </>
-          ) : (
-            <div>
-              <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Config Payload (JSON)</span>
-              <textarea 
-                className="w-full bg-zinc-950 border border-white/5 rounded-xl p-3 text-xs text-zinc-400 h-32 focus:outline-none focus:ring-1 focus:ring-primary/20 font-mono resize-none"
-                placeholder='{ "key": "value" }'
-                value={node.data.payload || ""}
-                onChange={(e) => onUpdate({ payload: e.target.value })}
-              />
-            </div>
-          )}
+          <div>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Extraction Schema</span>
+            <textarea 
+              className="w-full bg-zinc-950 border border-white/5 rounded-xl p-3 text-xs text-zinc-400 h-24 focus:outline-none focus:ring-1 focus:ring-primary/20 font-mono resize-none"
+              placeholder='{ "new_variable": "response.data.id" }'
+              value={node.data.mapping || ""}
+              onChange={(e) => onUpdate({ mapping: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/10">
+            <Code className="w-4 h-4 text-primary" />
+            <span className="text-[10px] text-zinc-400 leading-tight">Mapped variables will be available for all downstream nodes in this flow.</span>
+          </div>
         </div>
       </ConfigSection>
     </div>
   );
 };
+
+
 
 const nodeTypes = {
   custom: CustomFlowNode,
@@ -516,132 +466,191 @@ const nodeTypes = {
 
 const INITIAL_NODES: FlowNode[] = [
   { 
+    id: "node-start", 
+    type: "custom", 
+    position: { x: -100, y: 200 },
+    data: { 
+      type: "start", 
+      label: "START", 
+      icon: "Play", 
+      description: "Flow Activation Point" 
+    },
+  },
+  { 
     id: "node-1", 
     type: "custom", 
-    position: { x: 50, y: 150 },
+    position: { x: 200, y: 200 },
     data: { 
       type: "trigger", 
       label: "New Incoming Message", 
       icon: "MessageSquare", 
-      description: "Triggers on inbound WhatsApp/IG" 
+      description: "Triggers on inbound WhatsApp/IG",
+      docs: "Initiates the flow when a new message is received from a customer, allowing for immediate automated responses or intent analysis."
     },
   },
   { 
     id: "node-2", 
     type: "custom", 
-    position: { x: 350, y: 150 },
+    position: { x: 500, y: 200 },
     data: { 
       type: "ai", 
       label: "Analyze Intent", 
       icon: "Cpu", 
-      description: "Detecting 'Purchase' or 'Pricing'" 
+      description: "Detecting 'Purchase' or 'Pricing'",
+      docs: "Utilizes AI to understand the user's intent from their message, categorizing it (e.g., purchase, support, inquiry) to route the conversation appropriately."
     },
   },
   { 
     id: "node-3", 
     type: "custom", 
-    position: { x: 650, y: 150 },
-    data: { 
-      type: "integration", 
-      label: "hubspot_sync_contact", 
-      icon: "Network", 
-      description: "Sync lead details to CRM context" 
-    },
-  },
-  { 
-    id: "node-4", 
-    type: "custom", 
-    position: { x: 950, y: 50 },
-    data: { 
-      type: "integration", 
-      label: "slack_post_message", 
-      icon: "MessageCircle", 
-      description: "Alert #sales-high-priority" 
-    },
-  },
-  { 
-    id: "node-5", 
-    type: "custom", 
-    position: { x: 950, y: 250 },
-    data: { 
-      type: "integration", 
-      label: "sheets_append_row", 
-      icon: "FileSpreadsheet", 
-      description: "Log for Weekly Performance ROI" 
-    },
-  },
-  { 
-    id: "node-6", 
-    type: "custom", 
-    position: { x: 1250, y: 150 },
+    position: { x: 800, y: 200 },
     data: { 
       type: "action", 
       label: "Send VIP Greeting", 
       icon: "Send", 
-      description: "Personalized premium response" 
+      description: "Personalized premium response",
+      docs: "Dispatches a pre-defined or dynamically generated message to the user, serving as a direct communication point within the flow."
     },
   }
 ];
 
 const INITIAL_EDGES: FlowEdge[] = [
+  { id: "e0", source: "node-start", target: "node-1", animated: true },
   { id: "e1", source: "node-1", target: "node-2", animated: true },
-  { id: "e2", source: "node-2", target: "node-3", animated: true },
-  { id: "e3", source: "node-3", target: "node-4", animated: true },
-  { id: "e4", source: "node-3", target: "node-5", animated: true },
-  { id: "e5", source: "node-4", target: "node-6", animated: true },
-  { id: "e6", source: "node-5", target: "node-6", animated: true }
+  { id: "e2", source: "node-2", target: "node-3", animated: true }
 ];
 
-import { useState, useCallback, useRef, useEffect } from "react";
+const NODE_PALETTE = [
+  {
+    category: "Triggers",
+    items: [
+      { title: "New Message", desc: "Starts flow on inbound message", icon: "MessageSquare", type: "trigger", docs: "Initiates the flow when a new message is received from a customer, allowing for immediate automated responses or intent analysis." },
+      { title: "Scheduled Event", desc: "Starts flow at specific time", icon: "Clock", type: "trigger", docs: "Triggers the flow at a predefined time or interval, useful for sending scheduled promotions, reminders, or follow-ups." },
+      { title: "Webhook Event", desc: "Starts flow from external system", icon: "Database", type: "trigger", docs: "Activates the flow upon receiving data from an external system via a webhook, enabling integration with CRM, e-commerce, or other platforms." },
+    ],
+  },
+  {
+    category: "AI & Logic",
+    items: [
+      { title: "Analyze Intent", desc: "Detects user's goal", icon: "Cpu", type: "ai", docs: "Utilizes AI to understand the user's intent from their message, categorizing it (e.g., purchase, support, inquiry) to route the conversation appropriately." },
+      { title: "Generate Response", desc: "Crafts AI-powered message", icon: "Brain", type: "ai", docs: "Generates a dynamic, context-aware response using AI, tailored to the conversation's flow and user's needs, maintaining brand voice." },
+      { title: "Conditional Branch", desc: "Routes based on criteria", icon: "GitBranch", type: "condition", docs: "Creates branching paths in the flow based on specific conditions (e.g., keyword match, variable value, time of day), allowing for personalized user journeys." },
+      { title: "A/B Test Split", desc: "Splits traffic for testing", icon: "Layers", type: "condition", docs: "Divides incoming traffic into different branches to test variations of messages or flow paths, helping optimize performance and engagement." },
+    ],
+  },
+  {
+    category: "Actions",
+    items: [
+      { title: "Send Message", desc: "Sends a custom message", icon: "Send", type: "action", docs: "Dispatches a pre-defined or dynamically generated message to the user, serving as a direct communication point within the flow." },
+      { title: "Add CRM Tag", desc: "Tags user in CRM", icon: "UserCheck", type: "action", docs: "Applies a specific tag to the user's profile in an integrated CRM system, useful for segmentation, lead scoring, or triggering external workflows." },
+      { title: "HTTP Request", desc: "Calls external API", icon: "Zap", type: "integration", docs: "Executes an HTTP request to an external API, allowing the flow to fetch data, update records, or trigger actions in third-party services." },
+      { title: "Handover to Agent", desc: "Transfers to human agent", icon: "Plus", type: "action", docs: "Seamlessly transfers the conversation to a human agent or a specific department, ensuring complex or sensitive queries are handled personally." },
+    ],
+  },
+];
+
+const ICONS_MAP: { [key: string]: React.ElementType } = {
+  MessageSquare: MessageSquare,
+  Database: Database,
+  Clock: Clock,
+  GitBranch: GitBranch,
+  UserCheck: UserCheck,
+  Cpu: Cpu,
+  Brain: Brain,
+  Layers: Layers,
+  Send: Send,
+  Plus: Plus,
+  Zap: Zap,
+  Play: Play,
+};
+
+
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 export default function AutomationsPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
-  const [activeView, setActiveView] = useState<'editor' | 'logs' | 'library'>('editor');
+  const [activeView, setActiveView] = useState<'library' | 'editor' | 'logs'>('library');
   const [isSaving, setIsSaving] = useState(false);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Flow Palette state
-  const [paletteWidth, setPaletteWidth] = useState(320);
+  // Flow Palette state (Slim Icon Bar)
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const paletteRef = useRef<HTMLDivElement>(null);
 
   const selectedNodeId = nodes.find(n => n.selected)?.id || null;
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
 
-  // Resize handler
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  // Resizing state
+  const [paletteWidth, setPaletteWidth] = useState(260);
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const paletteWidthRef = useRef(260);
+  const sidebarWidthRef = useRef(320);
+  const resizeStartRef = useRef<{ x: number, width: number } | null>(null);
+  const [isResizingPalette, setIsResizingPalette] = useState(false);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  const startResizingPalette = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setIsResizing(true);
+    resizeStartRef.current = { x: e.clientX, width: paletteWidthRef.current };
+    setIsResizingPalette(true);
   }, []);
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const newWidth = e.clientX;
-      if (newWidth >= 280 && newWidth <= 500) {
-        setPaletteWidth(newWidth);
-      }
-    };
+  const startResizingSidebar = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeStartRef.current = { x: e.clientX, width: sidebarWidthRef.current };
+    setIsResizingSidebar(true);
+  }, []);
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
+  const stopResizing = useCallback(() => {
+    setIsResizingPalette(false);
+    setIsResizingSidebar(false);
+    // Sync state once at the end
+    setPaletteWidth(paletteWidthRef.current);
+    setSidebarWidth(sidebarWidthRef.current);
+  }, []);
 
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+  const resize = useCallback((e: MouseEvent) => {
+    if (e.buttons === 0 || !resizeStartRef.current) {
+      stopResizing();
+      return;
     }
 
+    if (isResizingPalette) {
+      const delta = e.clientX - resizeStartRef.current.x;
+      const newWidth = Math.max(180, Math.min(600, resizeStartRef.current.width + delta));
+      paletteWidthRef.current = newWidth;
+      document.documentElement.style.setProperty('--palette-width', `${newWidth}px`);
+    }
+    if (isResizingSidebar) {
+      const delta = resizeStartRef.current.x - e.clientX;
+      const newWidth = Math.max(280, Math.min(800, resizeStartRef.current.width + delta));
+      sidebarWidthRef.current = newWidth;
+      document.documentElement.style.setProperty('--sidebar-width', `${newWidth}px`);
+    }
+  }, [isResizingPalette, isResizingSidebar, stopResizing]);
+
+  useEffect(() => {
+    if (isResizingPalette || isResizingSidebar) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
+    } else {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    }
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
     };
-  }, [isResizing]);
+  }, [isResizingPalette, isResizingSidebar, resize, stopResizing]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
@@ -665,10 +674,7 @@ export default function AutomationsPage() {
       const type = "custom";
       const data = JSON.parse(event.dataTransfer.getData("application/reactflow"));
 
-      // check if the dropped element is valid
-      if (typeof type === "undefined" || !type) {
-        return;
-      }
+      if (typeof type === "undefined" || !type) return;
 
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
@@ -683,7 +689,8 @@ export default function AutomationsPage() {
           type: data.type,
           label: data.title,
           icon: data.icon,
-          description: data.desc || "Added from palette"
+          description: data.desc || "Added from toolset",
+          docs: data.docs || "No additional documentation available for this node."
         },
       };
 
@@ -693,250 +700,242 @@ export default function AutomationsPage() {
   );
 
   const SAVED_FLOWS = [
-    { id: "flow-1", title: "VIP Outreach", stats: "89% success", status: "Live", icon: GitBranch },
-    { id: "flow-2", title: "Silent Drop", stats: "124 runs", status: "Draft", icon: MessageSquare },
-    { id: "flow-3", title: "Welcome Seq", stats: "98.2% CTR", status: "Live", icon: Zap },
+    { id: "flow-1", title: "Global VIP", stats: "89% success", status: "Live", icon: GitBranch },
+    { id: "flow-2", title: "Ghost Campaign", stats: "124 runs", status: "Draft", icon: MessageSquare },
+    { id: "flow-3", title: "Pulse Check", stats: "98.2% CTR", status: "Live", icon: Zap },
   ];
 
   const FLOW_LOGS = [
-    { id: "1", flow: "VIP Outreach", target: "Alex Johnson", status: "Completed", result: "Order Confirmed", time: "2m ago" },
-    { id: "2", flow: "VIP Outreach", target: "Michael Chen", status: "At Fork", result: "Waiting for Human", time: "5m ago" },
-    { id: "3", flow: "Silent Drop", target: "Sarah Miller", status: "Active", result: "Intent Detected", time: "12m ago" },
-    { id: "4", flow: "Welcome Seq", target: "Emma Wilson", status: "Failed", result: "Rate Limit WA", time: "1h ago" },
+    { id: "1", flow: "Global VIP", target: "A. Johnson", status: "Completed", result: "Order OK", time: "2m" },
+    { id: "2", flow: "Global VIP", target: "M. Chen", status: "At Fork", result: "Wait Human", time: "5m" },
+    { id: "3", flow: "Ghost Campaign", target: "S. Miller", status: "Active", result: "Intent Out", time: "12m" },
+    { id: "4", flow: "Pulse Check", target: "E. Wilson", status: "Failed", result: "Rate Limit", time: "1h" },
   ];
 
   const saveFlow = () => {
     setIsSaving(true);
     setTimeout(() => {
-      const flowData = {
-        nodes,
-        edges,
-        metadata: {
-          updatedAt: new Date().toISOString(),
-          version: "1.0.0"
-        }
-      };
-      localStorage.setItem('elite-flow-data', JSON.stringify(flowData));
       setIsSaving(false);
-      toast.success("Flow Strategy Synced", {
-        description: "Industrial graph structure has been serialized and saved."
-      });
-    }, 800);
+      toast.success("Design Sync Complete");
+    }, 600);
   };
 
   const deleteSelectedNode = () => {
     if (selectedNodeId) {
-      setNodes((nds) => nds.filter((node) => node.id !== selectedNodeId));
-      setEdges((eds) => eds.filter((edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId));
+      setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
     }
   };
 
   return (
-    <div className="flex h-full bg-zinc-950/20 backdrop-blur-sm relative overflow-hidden">
-      {/* Workflow Palette (Left) */}
+    <div 
+      className={cn(
+        "flex h-screen bg-[#09090b] text-zinc-100 overflow-hidden font-sans selection:bg-primary/30 relative",
+        (isResizingPalette || isResizingSidebar) && "cursor-col-resize select-none"
+      )}
+      style={{
+        // @ts-ignore
+        '--palette-width': `${paletteWidth}px`,
+        // @ts-ignore
+        '--sidebar-width': `${sidebarWidth}px`
+      }}
+    >
+      <ScrollbarStyles />
+      
+      {/* Resizing Overlay - Prevents iframe/canvas event lag */}
+      {(isResizingPalette || isResizingSidebar) && (
+        <div className="absolute inset-0 z-[9999] bg-transparent" />
+      )}
+
+      {/* Toolkit Panel */}
       <motion.div 
-        ref={paletteRef}
-        initial={false}
         animate={{ 
-          width: isPaletteCollapsed ? 0 : paletteWidth,
-          opacity: isPaletteCollapsed ? 0 : 1
+          width: (activeView === 'editor' && !isPaletteCollapsed) ? 'var(--palette-width)' : 0,
+          opacity: (activeView === 'editor' && !isPaletteCollapsed) ? 1 : 0
         }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="h-full overflow-hidden border-r border-white/5 bg-zinc-950/40 backdrop-blur-3xl flex flex-col z-10 relative"
-        style={{ minWidth: isPaletteCollapsed ? 0 : paletteWidth }}
+        transition={{ type: 'spring', damping: 30, stiffness: 350, restDelta: 0.01 }}
+        className="h-full border-r border-white/5 bg-zinc-950/80 backdrop-blur-3xl flex flex-col z-30 overflow-hidden relative shrink-0"
       >
-        {!isPaletteCollapsed && (
-          <>
-            <div className="p-8 pb-4">
-              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-xl">
+        <div style={{ width: 'var(--palette-width)' }} className="h-full flex flex-col pt-6 px-3">
+          {/* Left Resize Handle */}
+          <div 
+            onMouseDown={startResizingPalette}
+            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-40 group"
+          >
+            <div className="absolute top-1/2 right-0 -translate-y-1/2 w-4 h-12 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
+               <div className="w-0.5 h-6 bg-primary/40 rounded-full" />
+            </div>
+          </div>
+
+            <div className="mb-8 flex items-center justify-between px-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
                   <GitBranch className="w-5 h-5 text-primary" />
                 </div>
-                Flow Palette
-              </h2>
-              <div className="relative mt-6">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-                <Input 
-                  placeholder="Search components..." 
-                  className="bg-white/5 border-white/5 pl-10 h-10 rounded-xl text-xs focus-visible:ring-primary/20"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-100">Toolkit</h3>
               </div>
             </div>
 
-            <ScrollArea className="flex-1 min-h-0 px-4 py-4">
-              <div className="space-y-8">
+            <div className={cn(
+              "flex-1 w-full min-h-0 custom-scrollbar mt-2 overflow-y-auto"
+            )}>
+              <div className="space-y-10 flex flex-col p-2 pb-10" style={{ width: 'calc(var(--palette-width) - 24px)' }}>
                 {NODE_PALETTE.map((cat) => (
-                  <div key={cat.category}>
-                    <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-4 px-4">{cat.category}</h3>
-                    <div className="space-y-2 px-2">
-                      {cat.items.map((item) => (
-                        <div 
-                          key={item.title}
-                          draggable
-                          onDragStart={(e) => onDragStart(e, "custom", item)}
-                          className="p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/5 transition-all group cursor-grab active:cursor-grabbing flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-3">
+                  <div key={cat.category} className="flex flex-col w-full pt-2 first:pt-0">
+                    <div className="flex items-center gap-3 mb-5 px-3">
+                      <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em]">{cat.category}</span>
+                      <div className="h-[1px] flex-1 bg-white/5" />
+                    </div>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      {cat.items.map((item) => {
+                        const Icon = ICONS_MAP[item.icon];
+                        return (
+                          <div
+                            key={item.title}
+                            draggable
+                            onDragStart={(e) => onDragStart(e, "custom", item)}
+                            className={cn(
+                              "flex items-center gap-3 p-2.5 rounded-xl cursor-grab active:cursor-grabbing transition-all border border-transparent hover:bg-white/5 group/item",
+                              isPaletteCollapsed ? "justify-center" : "justify-start"
+                            )}
+                          >
                             <div className={cn(
-                              "p-2 rounded-lg",
-                              item.type === "trigger" ? "bg-amber-500/10 text-amber-500" :
-                              item.type === "action" ? "bg-primary/10 text-primary" :
-                              item.type === "condition" ? "bg-blue-500/10 text-blue-500" :
-                              item.type === "integration" ? "bg-cyan-500/10 text-cyan-400" :
-                              "bg-purple-500/10 text-purple-500"
+                              "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border",
+                              item.type === "trigger" ? "bg-amber-500/10 text-amber-500 border-amber-500/10" :
+                              item.type === "action" ? "bg-primary/10 text-primary border-primary/10" :
+                              item.type === "condition" ? "bg-blue-500/10 text-blue-500 border-blue-500/20" :
+                              "bg-purple-500/10 text-purple-500 border-purple-500/10"
                             )}>
-                              {(() => {
-                                const Icon = ICONS_MAP[item.icon];
-                                return Icon ? <Icon className="w-4 h-4" /> : null;
-                              })()}
+                              {Icon && <Icon className="w-4 h-4" />}
                             </div>
-                            <div className="flex flex-col">
-                              <span className="text-xs font-bold text-zinc-200">{item.title}</span>
-                              <span className="text-[10px] text-zinc-500 font-medium">{item.desc}</span>
-                            </div>
-                          </div>
-                          
-                          <TooltipProvider>
-                            <Tooltip delayDuration={0}>
-                              <TooltipTrigger asChild>
-                                <button 
-                                  className="p-2 rounded-lg hover:bg-white/5 text-zinc-600 hover:text-zinc-400 transition-colors"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Info className="w-3.5 h-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent 
-                                side="right" 
-                                className="w-64 p-4 bg-zinc-900 border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl"
-                              >
-                                <div className="space-y-2">
-                                  <p className="text-[10px] font-black text-primary uppercase tracking-widest">Documentation</p>
-                                  <p className="text-[11px] text-zinc-300 leading-relaxed font-medium">
-                                    {item.docs}
-                                  </p>
+                            {!isPaletteCollapsed && (
+                              <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-[11px] font-bold text-zinc-200 truncate">{item.title}</p>
+                                  <p className="text-[9px] text-zinc-500 truncate leading-tight uppercase tracking-widest font-black opacity-60">{item.type}</p>
                                 </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                      ))}
+                                
+                                <TooltipProvider>
+                                  <Tooltip delayDuration={0}>
+                                    <TooltipTrigger asChild>
+                                      <div className="opacity-0 group-hover/item:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded-md cursor-help">
+                                        <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-primary transition-colors" />
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" sideOffset={15} className="bg-zinc-900 border-white/5 p-3 rounded-xl max-w-[200px] shadow-2xl z-[100]">
+                                      <p className="text-[10px] text-zinc-400 leading-relaxed font-medium">{item.docs}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
-            </ScrollArea>
-
-            {/* Resize Handle */}
-            <div
-              onMouseDown={handleMouseDown}
-              className={cn(
-                "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors group",
-                isResizing && "bg-primary"
-              )}
-            >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-primary/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          </>
-        )}
-      </motion.div>
-
-      {/* Toggle Button */}
-      <motion.button
-        onClick={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
-        className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-900/90 backdrop-blur-xl border border-white/10 hover:border-primary/40 p-2 rounded-r-xl transition-all hover:bg-zinc-800/90 group shadow-lg"
-        style={{ left: isPaletteCollapsed ? 0 : paletteWidth }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        {isPaletteCollapsed ? (
-          <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-primary transition-colors" />
-        ) : (
-          <ChevronLeft className="w-4 h-4 text-zinc-400 group-hover:text-primary transition-colors" />
-        )}
-      </motion.button>
-
-      {/* Canvas Area (Center) */}
-      <div className="flex-1 relative overflow-hidden bg-[radial-gradient(#ffffff05_1px,transparent_1px)] [background-size:32px_32px]" ref={reactFlowWrapper}>
-        {/* Floating Canvas Header */}
-        <div className="absolute top-8 left-8 right-8 flex items-center justify-between z-10">
-          <div className="flex items-center gap-4 bg-zinc-950/80 backdrop-blur-xl border border-white/10 p-2 rounded-2xl">
-            <div className="px-4 border-r border-white/5">
-              <span className="text-xs font-bold text-white tracking-tight">VIP Outreach Flow</span>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Automated Segment Handling</p>
-            </div>
-            <div className="flex items-center gap-1 p-1">
-              <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-primary hover:bg-primary/10">
-                <Play className="w-4 h-4 fill-primary" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-white/5">
-                <BarChart3 className="w-4 h-4" />
-              </Button>
             </div>
           </div>
+      </motion.div>
 
-          <div className="flex gap-3">
-            <div className="flex p-1 bg-white/5 border border-white/10 rounded-xl mr-4">
-              <button 
-                onClick={() => {
-                  setActiveView('library');
-                  setSelectedLogId(null);
-                }}
-                className={cn(
-                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                  activeView === 'library' ? "bg-primary text-black" : "text-zinc-500 hover:text-white"
-                )}
-              >
-                Library
-              </button>
-              <button 
-                onClick={() => {
-                  setActiveView('editor');
-                  setSelectedLogId(null);
-                }}
-                className={cn(
-                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                  activeView === 'editor' && !selectedLogId ? "bg-primary text-black" : "text-zinc-500 hover:text-white"
-                )}
-              >
-                Editor
-              </button>
-              <button 
-                onClick={() => setActiveView('logs')}
-                className={cn(
-                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                  activeView === 'logs' || selectedLogId ? "bg-primary text-black" : "text-zinc-500 hover:text-white"
-                )}
-              >
-                Flow Logs
-              </button>
-            </div>
-            {selectedLogId ? (
+      <div className="flex-1 flex flex-col relative">
+        {/* Compact Header */}
+        <div className="h-16 border-b border-white/5 bg-[#09090b]/80 backdrop-blur-xl flex items-center justify-between px-6 z-20">
+          <div className="flex items-center gap-3">
+            {activeView === 'editor' && (
               <Button 
-                onClick={() => {
-                  setSelectedLogId(null);
-                  setActiveView('logs');
-                }}
-                className="bg-white/10 text-white font-bold h-10 px-6 rounded-xl border border-white/10 hover:bg-white/20 transition-all"
+                variant="ghost" 
+                size="icon"
+                onClick={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
+                className={cn(
+                  "h-8 w-8 rounded-lg hover:bg-white/5 transition-colors",
+                  !isPaletteCollapsed ? "text-primary bg-primary/10 hover:bg-primary/20" : "text-zinc-500"
+                )}
               >
-                Exit Replay
+                <PanelLeft className="w-4 h-4" />
+              </Button>
+            )}
+            
+            {activeView === 'editor' ? (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setActiveView('library')}
+                className="h-8 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 text-zinc-400 group flex items-center gap-1.5"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="text-[11px] font-medium transition-transform group-hover:-translate-x-0.5">Library</span>
               </Button>
             ) : (
+              <div className="bg-zinc-900/50 p-0.5 rounded-lg flex gap-0.5 border border-white/5">
+                {(['library', 'logs'] as const).map(view => (
+                  <button 
+                    key={view}
+                    onClick={() => setActiveView(view)}
+                    className={cn(
+                      "px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
+                      activeView === view ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                    )}
+                  >
+                    {view === 'library' ? 'Strategies' : 'Logs'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {activeView === 'editor' ? (
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="h-8 px-3 rounded-lg bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20 hover:text-green-500 text-[11px] font-bold flex items-center gap-2"
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Live Status
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-white/5 rounded-xl p-1 shadow-2xl">
+                    <DropdownMenuItem onClick={saveFlow} className="rounded-lg text-[11px] font-medium py-2 focus:bg-white/5 transition-colors cursor-pointer">
+                      <Zap className="w-3.5 h-3.5 mr-2 text-primary" /> Sync Strategic Data
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-white/5" />
+                    <DropdownMenuItem onClick={() => setActiveView('library')} className="rounded-lg text-[11px] font-medium py-2 focus:bg-white/5 transition-colors cursor-pointer">
+                      <BarChart3 className="w-3.5 h-3.5 mr-2 text-blue-500" /> View Performance
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg text-[11px] font-medium py-2 focus:bg-red-500/10 focus:text-red-500 transition-colors cursor-pointer">
+                      <Trash2 className="w-3.5 h-3.5 mr-2" /> Deactivate Flow
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                <Button 
+                  onClick={saveFlow}
+                  size="sm"
+                  className="h-8 px-4 rounded-lg bg-primary text-black font-bold text-[11px]"
+                >
+                  Save Strategy
+                </Button>
+              </div>
+            ) : activeView === 'library' && (
               <Button 
-                onClick={saveFlow}
-                disabled={isSaving}
-                className="bg-primary text-black font-bold h-10 px-6 rounded-xl shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:bg-primary/90 transition-all disabled:opacity-50"
+                onClick={() => setActiveView('editor')}
+                size="sm"
+                className="h-8 px-4 rounded-lg bg-primary text-black font-bold text-[11px] flex items-center gap-2"
               >
-                {isSaving ? "Syncing..." : "Save Flow"}
+                <Plus className="w-4 h-4 stroke-[3]" />
+                Forge New Flow
               </Button>
             )}
           </div>
         </div>
 
-        {/* Nodes Canvas or Logs View */}
-        <div className="w-full h-full relative">
+        {/* Dynamic Content & Sidebar Wrapper */}
+        <div className="flex-1 flex flex-row overflow-hidden">
+          <div className="flex-1 relative overflow-hidden">
           <AnimatePresence mode="wait">
             {activeView === 'editor' ? (
               <motion.div
@@ -957,59 +956,72 @@ export default function AutomationsPage() {
                   onDragOver={onDragOver}
                   nodeTypes={nodeTypes}
                   fitView
-                  className="bg-transparent"
                   colorMode="dark"
+                  className="bg-[#09090b]"
                 >
-                  <Background color="#ffffff" gap={32} size={1} />
-                  <Controls className="bg-zinc-900 border-white/10" />
-                  <MiniMap 
-                    style={{ background: "#09090b", border: "1px solid rgba(255,255,255,0.05)" }}
-                    nodeColor="#3b82f6"
-                    maskColor="rgba(0,0,0,0.5)"
+                  <Background 
+                    color="#1a1a1e" 
+                    gap={24} 
+                    size={1} 
+                    variant={BackgroundVariant.Lines}
                   />
+                  <Controls className="!bg-zinc-900 !border-white/5 !shadow-2xl !rounded-lg !mb-6 !mr-6 overflow-hidden" />
                 </ReactFlow>
               </motion.div>
             ) : activeView === 'library' ? (
               <motion.div
                 key="library"
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="w-full h-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-20 pt-32"
+                exit={{ opacity: 0, y: -10 }}
+                className="w-full h-full p-8 overflow-auto"
               >
-                {SAVED_FLOWS.map((flow) => (
-                  <div 
-                    key={flow.id}
-                    onClick={() => setActiveView('editor')}
-                    className="p-8 rounded-[2rem] bg-zinc-900/30 border border-white/5 hover:border-primary/20 hover:bg-white/5 transition-all cursor-pointer group"
-                  >
-                    <div className="flex justify-between items-start mb-6">
-                      <div className="p-4 bg-primary/10 rounded-2xl">
-                        <flow.icon className="w-6 h-6 text-primary" />
+                <div className="max-w-7xl mx-auto space-y-8 pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight">Active Strategies</h2>
+                      <p className="text-xs text-zinc-500 mt-1">Manage your high-frequency automation circuits.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {SAVED_FLOWS.map((flow) => (
+                      <div 
+                        key={flow.id}
+                        onClick={() => setActiveView('editor')}
+                        className="p-6 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-primary/20 hover:bg-white/[0.02] transition-all cursor-pointer group relative overflow-hidden"
+                      >
+                        <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ArrowRight className="w-4 h-4 text-primary" />
+                        </div>
+                        
+                        <div className="flex items-center gap-4 mb-6">
+                          <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
+                            <flow.icon className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-white group-hover:text-primary transition-colors">{flow.title}</h4>
+                            <span className="text-[10px] text-zinc-500 font-medium">Efficiency: {flow.stats}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className={cn(
+                            "rounded-md text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border-none",
+                            flow.status === "Live" ? "bg-green-500/10 text-green-500" : "bg-zinc-800 text-zinc-500"
+                          )}>
+                            {flow.status}
+                          </Badge>
+                          <div className="flex -space-x-1.5">
+                             {[1,2,3].map(i => (
+                               <div key={i} className="w-5 h-5 rounded-full border-2 border-[#050505] bg-zinc-800" />
+                             ))}
+                          </div>
+                        </div>
                       </div>
-                      <Badge variant="outline" className={cn(
-                        "rounded-lg text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border-none",
-                        flow.status === "Live" ? "bg-green-500/10 text-green-500" : "bg-zinc-500/10 text-zinc-500"
-                      )}>
-                        {flow.status}
-                      </Badge>
-                    </div>
-                    <h4 className="text-lg font-bold text-white mb-1">{flow.title}</h4>
-                    <p className="text-xs text-zinc-500 mb-6 italic">{flow.stats}</p>
-                    <div className="flex items-center gap-2 text-primary font-bold text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                      Open Editor <ArrowRight className="w-3 h-3" />
-                    </div>
+                    ))}
                   </div>
-                ))}
-                <button 
-                  onClick={() => toast.info("Initializing New Strategy...")}
-                  className="p-8 rounded-[2rem] border-2 border-dashed border-white/5 hover:border-primary/20 hover:bg-primary/5 transition-all flex flex-col items-center justify-center gap-4 group"
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-zinc-500 group-hover:text-primary transition-colors">
-                    <Plus className="w-6 h-6" />
-                  </div>
-                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest group-hover:text-primary transition-colors">New Flow</span>
-                </button>
+                </div>
               </motion.div>
             ) : (
               <motion.div
@@ -1017,193 +1029,209 @@ export default function AutomationsPage() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="w-full h-full flex flex-col p-20 pt-32"
+                className="w-full h-full p-8 overflow-auto"
               >
-                <div className="bg-zinc-900/30 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl">
-                  <table className="w-full text-left">
-                    <thead className="bg-white/5 border-b border-white/5">
-                      <tr>
-                        <th className="px-6 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Flow Stage</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Client Target</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Status</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-right">Result Intelligence</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {FLOW_LOGS.map((log) => (
-                        <tr 
-                          key={log.id} 
-                          onClick={() => {
-                            setSelectedLogId(log.id);
-                            setActiveView('editor');
-                          }}
-                          className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer group"
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className={cn(
-                                "w-2 h-2 rounded-full",
-                                log.id === selectedLogId ? "bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.5)]" : "bg-zinc-700"
-                              )} />
-                              <span className="text-sm font-bold text-white">{log.flow}</span>
-                            </div>
-                            <span className="text-[10px] text-zinc-500 block mt-0.5">{log.time}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-medium text-zinc-300">{log.target}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <Badge variant="outline" className={cn(
-                              "rounded-lg text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border-none",
-                              log.status === "Completed" ? "bg-green-500/10 text-green-500" :
-                              log.status === "Failed" ? "bg-red-500/10 text-red-500" :
-                              "bg-primary/10 text-primary"
-                            )}>
-                              {log.status}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                             <div className="flex flex-col items-end">
-                               <span className="text-xs font-bold text-zinc-200">{log.result}</span>
-                               <span className="text-[10px] text-zinc-600 font-medium">Auto-resolved</span>
-                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                 <div className="max-w-7xl mx-auto space-y-6 pt-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-bold tracking-tight">System Performance Logs</h2>
+                      <div className="flex gap-4">
+                         <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase">99.2%</span>
+                            <span className="text-[9px] text-primary font-black uppercase tracking-tighter">Throughput</span>
+                         </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-3xl shadow-2xl">
+                      <table className="w-full text-left">
+                        <thead className="bg-white/5 border-b border-white/5">
+                          <tr>
+                            <th className="px-6 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Strategy</th>
+                            <th className="px-6 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Subject</th>
+                            <th className="px-6 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-wider text-right">Time</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.02]">
+                          {FLOW_LOGS.map((log) => (
+                            <tr 
+                              key={log.id} 
+                              onClick={() => {
+                                setSelectedLogId(log.id);
+                                setActiveView('editor');
+                              }}
+                              className="hover:bg-white/[0.02] transition-colors cursor-pointer"
+                            >
+                              <td className="px-6 py-4">
+                                <span className="text-[13px] font-bold text-white">{log.flow}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="text-xs font-medium text-zinc-400">{log.target}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge className={cn(
+                                  "rounded-md text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border-none",
+                                  log.status === "Completed" ? "bg-green-500/10 text-green-500" :
+                                  log.status === "Failed" ? "bg-red-500/10 text-red-500" :
+                                  "bg-primary/10 text-primary"
+                                )}>
+                                  {log.status}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <span className="text-[11px] font-bold text-zinc-600">{log.time}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
-      </div>
 
-      {/* Node Content Editor (Right) */}
-      <AnimatePresence>
-        {selectedNode && (
-          <motion.div 
-            initial={{ x: 400 }}
-            animate={{ x: 0 }}
-            exit={{ x: 400 }}
-            className="w-96 h-full overflow-hidden border-l border-white/5 bg-zinc-950/40 backdrop-blur-3xl flex flex-col z-10"
-          >
-            <div className="p-8 pb-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white tracking-tight">Config</h3>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => {
-                  setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
-                }}
-                className="rounded-xl hover:bg-white/10"
-              >
-                <Plus className="w-5 h-5 rotate-45 text-zinc-500" />
-              </Button>
+        {/* Global Config Sidebar (Right) */}
+        <motion.div 
+          animate={{ 
+            width: (selectedNode && activeView === 'editor') ? 'var(--sidebar-width)' : 0,
+            opacity: (selectedNode && activeView === 'editor') ? 1 : 0
+          }}
+          transition={{ type: 'spring', damping: 30, stiffness: 350, restDelta: 0.01 }}
+          className="h-full border-l border-white/5 bg-zinc-950/80 backdrop-blur-3xl overflow-hidden flex flex-col z-30 shrink-0 relative"
+        >
+          <div style={{ width: 'var(--sidebar-width)' }} className="h-full flex flex-col">
+            {/* Right Resize Handle */}
+            <div 
+              onMouseDown={startResizingSidebar}
+              className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-40 group"
+            >
+              <div className="absolute top-1/2 left-0 -translate-y-1/2 w-4 h-12 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
+                 <div className="w-0.5 h-6 bg-primary/40 rounded-full" />
+              </div>
             </div>
+              <div className="h-16 flex items-center justify-between px-6 border-b border-white/5">
+                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">Circuit Config</h3>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
+                  className="h-8 w-8 rounded-lg hover:bg-white/5"
+                >
+                  <Plus className="w-4 h-4 rotate-45 text-zinc-500" />
+                </Button>
+              </div>
 
-            <ScrollArea className="flex-1 min-h-0 p-8 pt-4">
-              <div className="space-y-8">
-                <section>
-                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] block mb-4">Node Behavior</label>
-                  <div className="p-5 rounded-2xl bg-white/5 border border-white/5 space-y-4">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Identification</span>
+              <ScrollArea id="sidebar-scroll-area" className="flex-1 overflow-hidden">
+                <div className="p-6 space-y-10" style={{ width: 'var(--sidebar-width)' }}>
+                  <section className="space-y-4">
+                    <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest block">Identity</label>
+                    <div className="space-y-4">
                       <Input 
-                        value={(selectedNode.data?.label as string) || ""}
+                        value={(selectedNode?.data?.label as string) || ""}
                         onChange={(e) => {
                           const newLabel = e.target.value;
                           setNodes((nds) => nds.map((n) => n.id === selectedNodeId ? { ...n, data: { ...n.data, label: newLabel } } : n));
                         }}
-                        className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs"
+                        className="bg-zinc-950 border-white/5 rounded-xl h-10 text-xs font-bold"
                       />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2">Internal Notes</span>
                       <textarea 
-                        className="w-full bg-zinc-950 border border-white/5 rounded-xl p-3 text-xs text-zinc-400 h-24 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none"
-                        placeholder="Explain purpose of this logic..."
-                        value={(selectedNode.data?.notes as string) || ""}
+                        className="w-full bg-zinc-950 border border-white/5 rounded-xl p-4 text-[11px] text-zinc-400 h-28 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none leading-relaxed"
+                        placeholder="Strategic notes..."
+                        value={(selectedNode?.data?.notes as string) || ""}
                         onChange={(e) => {
                           const newNotes = e.target.value;
                           setNodes((nds) => nds.map((n) => n.id === selectedNodeId ? { ...n, data: { ...n.data, notes: newNotes } } : n));
                         }}
                       />
                     </div>
-                  </div>
-                </section>
+                  </section>
 
-                {/* Dynamic Configuration Based on Node Type */}
-                {selectedNode.data?.type === "trigger" && (
-                  <TriggerConfig 
-                    node={selectedNode}
-                    onUpdate={(updates) => {
-                      setNodes((nds) => nds.map((n) => 
-                        n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
-                      ));
-                    }}
-                  />
-                )}
+                  {/* Documentation / Guidance */}
+                  <section className="p-5 rounded-2xl bg-primary/[0.03] border border-primary/10 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                        <Info className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Strategy Guide</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed italic">
+                      {(selectedNode?.data?.docs as string) || "This node executes internal automation logic. Hover over palette items for detailed capabilities."}
+                    </p>
+                  </section>
 
-                {selectedNode.data?.type === "condition" && (
-                  <ConditionConfig 
-                    node={selectedNode}
-                    onUpdate={(updates) => {
-                      setNodes((nds) => nds.map((n) => 
-                        n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
-                      ));
-                    }}
-                  />
-                )}
+                  {/* Dynamic Configurations */}
+                  {selectedNode?.data?.type === "trigger" && (
+                    <TriggerConfig 
+                      node={selectedNode}
+                      onUpdate={(updates) => {
+                        setNodes((nds) => nds.map((n) => 
+                          n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
+                        ));
+                      }}
+                    />
+                  )}
 
-                {selectedNode.data?.type === "ai" && (
-                  <AIConfig 
-                    node={selectedNode}
-                    onUpdate={(updates) => {
-                      setNodes((nds) => nds.map((n) => 
-                        n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
-                      ));
-                    }}
-                  />
-                )}
+                  {selectedNode?.data?.type === "condition" && (
+                    <ConditionConfig 
+                      node={selectedNode}
+                      onUpdate={(updates) => {
+                        setNodes((nds) => nds.map((n) => 
+                          n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
+                        ));
+                      }}
+                    />
+                  )}
 
-                {selectedNode.data?.type === "integration" && (
-                  <MCPConfig 
-                    node={selectedNode}
-                    onUpdate={(updates) => {
-                      setNodes((nds) => nds.map((n) => 
-                        n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
-                      ));
-                    }}
-                  />
-                )}
+                  {selectedNode?.data?.type === "ai" && (
+                    <AIConfig 
+                      node={selectedNode}
+                      onUpdate={(updates) => {
+                        setNodes((nds) => nds.map((n) => 
+                          n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
+                        ));
+                      }}
+                    />
+                  )}
 
-                {selectedNode.data?.type === "action" && (
-                  <ActionConfig 
-                    node={selectedNode}
-                    onUpdate={(updates) => {
-                      setNodes((nds) => nds.map((n) => 
-                        n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
-                      ));
-                    }}
-                  />
-                )}
+                  {selectedNode?.data?.type === "integration" && (
+                    <HTTPRequestConfig 
+                      node={selectedNode}
+                      onUpdate={(updates) => {
+                        setNodes((nds) => nds.map((n) => 
+                          n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
+                        ));
+                      }}
+                    />
+                  )}
 
-                <section className="pt-8 pb-12">
-                  <Button 
-                    onClick={deleteSelectedNode}
-                    variant="ghost" 
-                    className="w-full h-11 text-red-500 hover:bg-red-500/10 hover:text-red-400 font-bold rounded-xl border border-red-500/10"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Deactivate Node
-                  </Button>
-                </section>
-              </div>
-            </ScrollArea>
+                  {selectedNode?.data?.type === "action" && (
+                    <ActionConfig 
+                      node={selectedNode}
+                      onUpdate={(updates) => {
+                        setNodes((nds) => nds.map((n) => 
+                          n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
+                        ));
+                      }}
+                    />
+                  )}
+
+                  <section className="pt-8 pb-10">
+                    <Button 
+                      onClick={deleteSelectedNode}
+                      variant="ghost" 
+                      className="w-full h-10 text-red-500 hover:bg-red-500/10 hover:text-red-400 font-bold text-[10px] uppercase tracking-widest rounded-xl border border-red-500/10"
+                    >
+                      Remove Node
+                    </Button>
+                  </section>
+                </div>
+              </ScrollArea>
+            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }
