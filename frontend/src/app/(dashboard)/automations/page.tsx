@@ -588,6 +588,12 @@ export default function AutomationsPage() {
   const [activeView, setActiveView] = useState<'library' | 'editor' | 'logs'>('library');
   const [isSaving, setIsSaving] = useState(false);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const openNamingDialog = (auto: Automation, e?: React.MouseEvent) => {
@@ -887,14 +893,16 @@ export default function AutomationsPage() {
       }}
     >
       <ScrollbarStyles />
-      
-      {/* Resizing Overlay - Prevents iframe/canvas event lag */}
+      {!isMounted ? null : (
+        <>
+          {/* Resizing Overlay - Prevents iframe/canvas event lag */}
       {(isResizingPalette || isResizingSidebar) && (
         <div className="absolute inset-0 z-[9999] bg-transparent" />
       )}
 
       {/* Toolkit Panel */}
       <motion.div 
+        initial={{ width: 0, opacity: 0 }}
         animate={{ 
           width: (activeView === 'editor' && !isPaletteCollapsed) ? 'var(--palette-width)' : 0,
           opacity: (activeView === 'editor' && !isPaletteCollapsed) ? 1 : 0
@@ -1321,6 +1329,7 @@ export default function AutomationsPage() {
 
         {/* Global Config Sidebar (Right) */}
         <motion.div 
+          initial={{ width: 0, opacity: 0 }}
           animate={{ 
             width: (selectedNode && activeView === 'editor') ? 'var(--sidebar-width)' : 0,
             opacity: (selectedNode && activeView === 'editor') ? 1 : 0
@@ -1504,6 +1513,8 @@ export default function AutomationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

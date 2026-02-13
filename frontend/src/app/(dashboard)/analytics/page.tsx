@@ -9,65 +9,16 @@ import {
   Clock,
   AlertCircle,
   CheckCircle2,
-  ArrowUpRight,
-  Activity
+  Activity,
+  Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AreaChart, Area, PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-
-// --- MOCK DATA ---
-
-const heroMetrics = {
-  totalMessages: 1247,
-  messagesTrend: 12,
-  sentimentScore: 87,
-  sentimentTrend: 3,
-  activeFlows: 23,
-  flowSuccessRate: 94,
-  avgResponseTime: 4.2,
-  responseTrend: -18,
-};
-
-const sentimentData = [
-  { date: 'Mon', positive: 85, neutral: 10, negative: 5 },
-  { date: 'Tue', positive: 82, neutral: 12, negative: 6 },
-  { date: 'Wed', positive: 88, neutral: 8, negative: 4 },
-  { date: 'Thu', positive: 75, neutral: 15, negative: 10 },
-  { date: 'Fri', positive: 90, neutral: 7, negative: 3 },
-  { date: 'Sat', positive: 92, neutral: 6, negative: 2 },
-  { date: 'Sun', positive: 89, neutral: 8, negative: 3 },
-];
-
-const platformData = [
-  { platform: 'WhatsApp', count: 773, percentage: 62, color: '#25D366' },
-  { platform: 'Instagram', count: 349, percentage: 28, color: '#E4405F' },
-  { platform: 'Telegram', count: 125, percentage: 10, color: '#0088cc' },
-];
-
-const flowPerformance = [
-  { name: 'VIP Outreach', executions: 89, successRate: 94 },
-  { name: 'Silent Drop Alert', executions: 67, successRate: 91 },
-  { name: 'Welcome Sequence', executions: 45, successRate: 88 },
-  { name: 'Re-engagement', executions: 34, successRate: 85 },
-  { name: 'Feedback Loop', executions: 28, successRate: 92 },
-];
-
-const alerts = [
-  { id: '1', type: 'negative' as const, message: '2 clients mentioned "shipping delay" today', action: 'View conversations' },
-  { id: '2', type: 'positive' as const, message: 'Sarah Miller sentiment +45% after your DM', action: 'Trigger upsell flow' },
-  { id: '3', type: 'info' as const, message: '"VIP Outreach" flow 94% success (↑ 8%)', action: 'Keep using this strategy' },
-];
-
-const activityFeed = [
-  { id: '1', type: 'flow' as const, description: 'Flow "VIP Outreach" completed for Alex', timestamp: '2m ago' },
-  { id: '2', type: 'ai' as const, description: 'AI detected positive intent from Sarah', timestamp: '8m ago' },
-  { id: '3', type: 'message' as const, description: 'New message on Instagram from Michael', timestamp: '15m ago' },
-  { id: '4', type: 'broadcast' as const, description: 'Broadcast sent to 47 clients', timestamp: '1h ago' },
-  { id: '5', type: 'flow' as const, description: 'Flow "Welcome Sequence" started for Emma', timestamp: '2h ago' },
-];
+import { useEffect, useState, useCallback } from "react";
+import { analyticsService, AnalyticsDashboard } from "@/lib/services/analyticsService";
+import { useAuth } from "@/context/AuthContext";
 
 // --- COMPONENTS ---
 
@@ -86,7 +37,7 @@ const StatCard = ({
   suffix?: string;
   trendLabel?: string;
 }) => {
-  const isPositive = trend > 0;
+  const isPositive = trend >= 0;
   const TrendIcon = isPositive ? TrendingUp : TrendingDown;
   
   return (
@@ -117,6 +68,42 @@ const StatCard = ({
 };
 
 export default function DashboardPage() {
+  const { currentWorkspaceId } = useAuth();
+  const [data, setData] = useState<AnalyticsDashboard | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    if (!currentWorkspaceId) return;
+    try {
+      setIsLoading(true);
+      const dashboard = await analyticsService.getDashboard(currentWorkspaceId);
+      setData(dashboard);
+    } catch (error) {
+      console.error("Failed to load analytics:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentWorkspaceId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  if (isLoading) {
+    return (
+      <div className="h-full bg-[#09090b] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Decrypting Insights...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { hero, alerts, timeline, distribution } = data;
+
   return (
     <div className="h-full bg-[#09090b] flex flex-col">
       {/* Header */}
@@ -138,29 +125,29 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
               title="Total Messages"
-              value={heroMetrics.totalMessages.toLocaleString()}
-              trend={heroMetrics.messagesTrend}
+              value={hero.totalMessages.toLocaleString()}
+              trend={hero.messagesTrend}
               icon={MessageSquare}
             />
             <StatCard
               title="AI Sentiment IQ"
-              value={heroMetrics.sentimentScore}
-              trend={heroMetrics.sentimentTrend}
+              value={hero.sentimentScore}
+              trend={hero.sentimentTrend}
               icon={Brain}
               suffix="%"
               trendLabel="Positive sentiment"
             />
             <StatCard
               title="Active Flows"
-              value={heroMetrics.activeFlows}
-              trend={heroMetrics.flowSuccessRate - 90}
+              value={hero.activeFlows}
+              trend={hero.flowSuccessRate}
               icon={Zap}
-              trendLabel={`${heroMetrics.flowSuccessRate}% success rate`}
+              trendLabel={`${hero.flowSuccessRate}% active ratio`}
             />
             <StatCard
               title="Avg Response"
-              value={heroMetrics.avgResponseTime}
-              trend={heroMetrics.responseTrend}
+              value={hero.avgResponseTime}
+              trend={hero.responseTimeTrend}
               icon={Clock}
               suffix=" min"
               trendLabel="Response time"
@@ -181,7 +168,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-zinc-500 font-medium">Last 7 days</p>
               </div>
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={sentimentData}>
+                <AreaChart data={timeline}>
                   <defs>
                     <linearGradient id="sentimentGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -220,11 +207,11 @@ export default function DashboardPage() {
               <div className="mt-4 flex items-center gap-4 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                  <span className="text-zinc-500">Negative Spike: Thu (shipping)</span>
+                  <span className="text-zinc-500">Negative Spike Detection</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-zinc-500">Positive Surge: Sat (new drop)</span>
+                  <span className="text-zinc-500">Positive Trend Analysis</span>
                 </div>
               </div>
             </motion.div>
@@ -244,7 +231,7 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="50%" height={200}>
                   <PieChart>
                     <Pie
-                      data={platformData}
+                      data={distribution}
                       cx="50%"
                       cy="50%"
                       innerRadius={50}
@@ -252,14 +239,14 @@ export default function DashboardPage() {
                       paddingAngle={2}
                       dataKey="count"
                     >
-                      {platformData.map((entry, index) => (
+                      {distribution.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="flex-1 space-y-3">
-                  {platformData.map((platform) => (
+                  {distribution.map((platform) => (
                     <div key={platform.platform} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div 
@@ -274,53 +261,16 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ))}
+                  {distribution.length === 0 && (
+                    <p className="text-[10px] text-zinc-600 italic">No channels detected</p>
+                  )}
                 </div>
               </div>
             </motion.div>
           </div>
 
-          {/* Flow Performance */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="p-6 rounded-2xl bg-zinc-900/30 border border-white/5 backdrop-blur-xl"
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-white mb-1">AI Automation Intelligence</h3>
-                <p className="text-xs text-zinc-500 font-medium">Flow execution summary (This week)</p>
-              </div>
-              <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20 rounded-lg px-3 py-1 text-[10px] font-bold">
-                AI Handover: 12%
-              </Badge>
-            </div>
-            <div className="space-y-4">
-              {flowPerformance.map((flow, index) => (
-                <div key={flow.name} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-200">{flow.name}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] text-zinc-600">{flow.executions} runs</span>
-                      <span className="text-xs font-bold text-green-500">{flow.successRate}% ✓</span>
-                    </div>
-                  </div>
-                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${flow.successRate}%` }}
-                      transition={{ delay: 0.4 + index * 0.1, duration: 0.6 }}
-                      className="h-full bg-gradient-to-r from-primary to-purple-500 rounded-full"
-                    ></motion.div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* AI Alerts & Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* AI Alerts */}
+          {/* AI Alerts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -328,61 +278,44 @@ export default function DashboardPage() {
               className="p-6 rounded-2xl bg-zinc-900/30 border border-white/5 backdrop-blur-xl"
             >
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-white mb-1">AI-Detected Alerts</h3>
-                <p className="text-xs text-zinc-500 font-medium">Critical insights</p>
+                <h3 className="text-lg font-bold text-white mb-1">AI-Detected Tactical Alerts</h3>
+                <p className="text-xs text-zinc-500 font-medium">Critical insights generated from incoming messages</p>
               </div>
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {alerts.map((alert) => (
                   <div
                     key={alert.id}
                     className={cn(
-                      "p-4 rounded-xl border flex items-start justify-between gap-3",
-                      alert.type === 'negative' && "bg-red-500/5 border-red-500/20",
-                      alert.type === 'positive' && "bg-green-500/5 border-green-500/20",
-                      alert.type === 'info' && "bg-blue-500/5 border-blue-500/20"
+                      "p-4 rounded-xl border flex flex-col justify-between gap-3",
+                      alert.type === 'NEGATIVE' && "bg-red-500/5 border-red-500/20",
+                      alert.type === 'POSITIVE' && "bg-green-500/5 border-green-500/20",
+                      alert.type === 'WARNING' && "bg-amber-500/5 border-amber-500/20",
+                      alert.type === 'INFO' && "bg-blue-500/5 border-blue-500/20"
                     )}
                   >
-                    <div className="flex items-start gap-3 flex-1">
-                      {alert.type === 'negative' && <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />}
-                      {alert.type === 'positive' && <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5" />}
-                      {alert.type === 'info' && <Activity className="w-4 h-4 text-blue-500 mt-0.5" />}
-                      <p className="text-xs text-zinc-300 font-medium leading-relaxed">{alert.message}</p>
+                    <div className="flex items-start gap-3">
+                      {alert.type === 'NEGATIVE' && <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />}
+                      {alert.type === 'POSITIVE' && <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5" />}
+                      {alert.type === 'WARNING' && <Activity className="w-4 h-4 text-amber-500 mt-0.5" />}
+                      {alert.type === 'INFO' && <Activity className="w-4 h-4 text-blue-500 mt-0.5" />}
+                      <div className="flex-1">
+                        <p className="text-xs text-zinc-300 font-medium leading-relaxed">{alert.message}</p>
+                        <p className="text-[9px] text-zinc-600 mt-1 uppercase tracking-widest font-black">{new Date(alert.created_at).toLocaleTimeString()}</p>
+                      </div>
                     </div>
-                    <button className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors whitespace-nowrap">
-                      {alert.action} →
-                    </button>
+                    {alert.action_text && (
+                      <button className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors self-end uppercase tracking-widest">
+                        {alert.action_text} →
+                      </button>
+                    )}
                   </div>
                 ))}
-              </div>
-            </motion.div>
-
-            {/* Activity Feed */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="p-6 rounded-2xl bg-zinc-900/30 border border-white/5 backdrop-blur-xl"
-            >
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-white mb-1">Recent Activity</h3>
-                <p className="text-xs text-zinc-500 font-medium">Latest events</p>
-              </div>
-              <div className="space-y-4">
-                {activityFeed.map((item, index) => (
-                  <div key={item.id} className="flex items-start gap-3">
-                    <div className={cn(
-                      "w-2 h-2 rounded-full mt-1.5",
-                      item.type === 'flow' && "bg-primary",
-                      item.type === 'ai' && "bg-purple-500",
-                      item.type === 'message' && "bg-blue-500",
-                      item.type === 'broadcast' && "bg-green-500"
-                    )}></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-zinc-300 font-medium">{item.description}</p>
-                      <p className="text-[10px] text-zinc-600 mt-0.5">{item.timestamp}</p>
-                    </div>
+                {alerts.length === 0 && (
+                  <div className="col-span-full py-8 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl bg-white/[0.02]">
+                    <CheckCircle2 className="w-8 h-8 text-zinc-600 mb-2 opacity-20" />
+                    <p className="text-xs font-black uppercase tracking-widest text-zinc-600">No Critical Alerts</p>
                   </div>
-                ))}
+                )}
               </div>
             </motion.div>
           </div>

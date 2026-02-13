@@ -12,6 +12,7 @@ import contactRoutes from './routes/contact.routes.js';
 import tagRoutes from './routes/tag.routes.js';
 import pulseTemplateRoutes from './routes/pulseTemplate.routes.js';
 import pulseRoutes from './routes/pulse.routes.js';
+import analyticsRoutes from './routes/analytics.routes.js';
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/pulse-templates', pulseTemplateRoutes);
 app.use('/api/pulses', pulseRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 
 /**

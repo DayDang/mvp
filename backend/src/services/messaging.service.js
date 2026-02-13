@@ -1,5 +1,6 @@
 import { client as unipileClient } from '../config/unipile.js';
 import { prisma } from '../config/database.js';
+import * as aiService from './ai.service.js';
 
 /**
  * Service to handle Unipile messaging operations and database synchronization
@@ -45,7 +46,10 @@ export const sendMessage = async (chatId, { text, attachments, voice_message }) 
     // 2. Send via Unipile
     const unipileResponse = await unipileClient.messaging.sendMessage(sendData);
 
-    // 3. Save to DB
+    // 3. AI Analysis
+    const { score, label } = await aiService.analyzeSentiment(text);
+
+    // 4. Save to DB
     const message = await prisma.message.create({
       data: {
         unipile_id: unipileResponse.id,
@@ -56,7 +60,9 @@ export const sendMessage = async (chatId, { text, attachments, voice_message }) 
         timestamp: new Date(unipileResponse.timestamp),
         is_from_me: true,
         type: voice_message ? 'VOICE' : (attachments ? 'FILE' : 'TEXT'),
-        attachments: attachments || voice_message ? JSON.stringify(unipileResponse.attachments || []) : null
+        attachments: attachments || voice_message ? JSON.stringify(unipileResponse.attachments || []) : null,
+        sentiment_score: score,
+        sentiment_label: label
       }
     });
 
@@ -152,6 +158,63 @@ export const syncConversations = async (accountId) => {
     return { synced_count: chats.length };
   } catch (error) {
     console.error('Messaging Service Error (syncConversations):', error);
+    throw error;
+  }
+};
+
+export const syncMessages = async (chatId) => {
+  try {
+    // 1. Fetch Chat to get workspace context
+    const chat = await prisma.chat.findUnique({
+      where: { unipile_id: chatId },
+      include: { account: true }
+    });
+    if (!chat) throw new Error('Chat not found');
+
+    // 2. Fetch messages from Unipile
+    const messagesResponse = await unipileClient.messaging.getMessages({
+      chat_id: chatId,
+      limit: 20 // Adjust as needed
+    });
+
+    const messages = messagesResponse.items || [];
+    let processed = 0;
+
+    for (const msgData of messages) {
+      // 3. Check if already exists
+      const existing = await prisma.message.findUnique({
+        where: { unipile_id: msgData.id }
+      });
+
+      if (!existing) {
+        // 4. AI Sentiment & Alert Scanning
+        const { score, label } = await aiService.scanForAlerts(chat.account.workspace_id, {
+          text: msgData.text || '',
+          unipile_id: msgData.id
+        });
+
+        await prisma.message.create({
+          data: {
+            unipile_id: msgData.id,
+            chat_id: chatId,
+            account_id: msgData.account_id,
+            text: msgData.text || null,
+            sender_id: msgData.sender_id,
+            timestamp: new Date(msgData.timestamp),
+            is_from_me: msgData.sender_id === msgData.account_id, // Simplified check
+            type: msgData.type,
+            attachments: msgData.attachments ? JSON.stringify(msgData.attachments) : null,
+            sentiment_score: score,
+            sentiment_label: label
+          }
+        });
+        processed++;
+      }
+    }
+
+    return { processed_count: processed };
+  } catch (error) {
+    console.error('Messaging Service Error (syncMessages):', error);
     throw error;
   }
 };

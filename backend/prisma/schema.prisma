@@ -49,6 +49,7 @@ model Workspace {
   tags          Tag[]
   pulseTemplates PulseTemplate[]
   pulses        Pulse[]
+  aiAlerts      AIAlert[]
   created_at    DateTime          @default(now())
   updated_at    DateTime          @updatedAt
 }
@@ -132,6 +133,11 @@ model Message {
   timestamp       DateTime?
   is_from_me      Boolean   @default(false)
   attachments     String?   // JSON string of attachments metadata
+  
+  // Tactical AI Insights
+  sentiment_score Float?    // -1 to 1 or 0 to 100
+  sentiment_label String?   // POSITIVE, NEGATIVE, NEUTRAL
+  
   is_active       Boolean   @default(true)
   created_by      String?
   updated_by      String?
@@ -226,4 +232,21 @@ model Pulse {
   @@index([workspace_id])
   @@index([template_id])
   @@index([automation_id])
+}
+
+model AIAlert {
+  id              String    @id @default(uuid())
+  type            String    // POSITIVE, NEGATIVE, INFO, WARNING
+  message         String
+  action_text     String?
+  source_id       String?   // e.g., message_id or chat_id related to this alert
+  is_resolved     Boolean   @default(false)
+  
+  workspace_id    String
+  workspace       Workspace @relation(fields: [workspace_id], references: [id])
+  
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@index([workspace_id])
 }
